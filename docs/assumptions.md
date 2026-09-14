@@ -12,7 +12,16 @@ deviation) and in the top-level `PLAN.md` deviation log, not here, because
 they are implementation-shape decisions rather than assumptions about
 real-world operating rules.
 
-Assumptions will be added here as later phases introduce them — for
-example, Phase 2 is expected to add a default report time
-(report = STD − 90 min) that will need to be marked here as an assumption,
-not confirmed data, until sourced from an actual roster or OM-A extract.
+Assumptions will be added here as later phases introduce them.
+
+Phase 2 (pairing engine + manual roster constructor) introduced several
+judgment calls about real-world operating behavior — the default report
+time (STD − 90 min), the UTC-vs-local-day reading of `daysOfWeek`, the
+same-aircraft-type-per-pairing assumption, the default 2-pilot/no-
+augmented-crew assumption when bridging to Phase 3's `evaluateDuty()`, the
+FDP start/end boundary convention, and two implementation-shape decisions
+(manual-constructor-not-drag-and-drop; only-assigned-pairings-persisted).
+All logged in full, with reasoning, in `docs/pairing-assumptions.md` rather
+than here, to keep this file's Phase 1 header (which points readers to
+deviation logs vs. assumption logs) accurate as the two document types
+diverge by phase.

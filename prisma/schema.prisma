@@ -68,9 +68,166 @@ model Flight {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  instances FlightInstance[]
+
   @@unique([number, depAirportId, arrAirportId, stdUTCMin, daysOfWeek, effectiveFrom, effectiveTo, source], name: "flight_natural_key")
   @@index([number])
   @@index([depAirportId, arrAirportId])
   @@index([effectiveFrom, effectiveTo])
   @@index([confidence])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — pairing engine additions (additive only; nothing above this line
+// was changed in Phase 2 beyond adding the `instances` back-relation on
+// Flight). See docs/pairing-assumptions.md for the judgment calls behind
+// this shape.
+// ---------------------------------------------------------------------------
+
+/// A specific calendar-date occurrence of a Flight schedule line, expanding
+/// daysOfWeek/effectiveFrom/effectiveTo into an actual operating date.
+///
+/// DESIGN CHOICE (see docs/pairing-assumptions.md): persisted, not purely
+/// in-memory. Rationale: PairingLeg needs a stable foreign key to reference
+/// ("this leg of this pairing is this exact dated departure"), and that
+/// reference must survive across requests (a user assigns a pairing to a
+/// roster day today, reopens the roster next week — the FK must still
+/// resolve). Rows are generated lazily/idempotently, only for months
+/// actually requested (see src/pairing/db/flightInstances.ts), never
+/// eagerly for the whole schedule — so this never becomes a huge
+/// pre-materialized date range.
+///
+/// `serviceDate` is the UTC calendar date the flight's `daysOfWeek` pattern
+/// is evaluated against (see ASSUMPTION in docs/pairing-assumptions.md:
+/// Flight.stdUTCMin/staUTCMin have no associated local date, only a
+/// minutes-since-UTC-midnight time, so daysOfWeek is necessarily read
+/// against the UTC calendar day, not a station-local day).
+model FlightInstance {
+  id       String @id @default(cuid())
+  flightId String
+  flight   Flight @relation(fields: [flightId], references: [id])
+
+  /// UTC calendar date (stored at 00:00 UTC) this instance operates on.
+  serviceDate DateTime
+  /// Computed absolute departure instant (serviceDate + stdUTCMin).
+  depUTC DateTime
+  /// Computed absolute arrival instant (serviceDate + staUTCMin + arrivalDayOffset days).
+  arrUTC DateTime
+
+  createdAt DateTime @default(now())
+
+  legs PairingLeg[]
+
+  @@unique([flightId, serviceDate])
+  @@index([serviceDate])
+  @@index([depUTC])
+}
+
+/// A DXB-based pairing: an ordered sequence of PairingLeg rows, each
+/// referencing one FlightInstance, sharing one `fleetType` (see
+/// docs/pairing-assumptions.md — same-aircraft-type-per-pairing
+/// assumption).
+///
+/// DESIGN CHOICE: only pairings a user actually assigns to a roster day are
+/// persisted here. The much larger set of *candidate* pairings offered for
+/// selection in the UI is produced on demand by the pure
+/// src/pairing/generatePairings.ts search and never written to the
+/// database — persisting every candidate for every month would blow up
+/// combinatorially for no benefit, since only the chosen one needs a
+/// stable identity.
+model Pairing {
+  id        String @id @default(cuid())
+  fleetType String
+
+  /// Service date of the first leg (always a DXB departure).
+  startDate DateTime
+  /// Service date of the last leg (always a DXB arrival).
+  endDate   DateTime
+  /// Number of calendar days this pairing spans, inclusive (startDate..endDate).
+  tripDays  Int
+
+  createdAt DateTime @default(now())
+
+  legs         PairingLeg[]
+  rosterEntries RosterEntry[]
+
+  @@index([startDate])
+}
+
+model PairingLeg {
+  id        String  @id @default(cuid())
+  pairingId String
+  pairing   Pairing @relation(fields: [pairingId], references: [id], onDelete: Cascade)
+
+  /// 0-based order of this leg within the pairing.
+  sequence Int
+
+  flightInstanceId String
+  flightInstance   FlightInstance @relation(fields: [flightInstanceId], references: [id])
+
+  /// Layover before this leg, in minutes. Null for the first leg (no
+  /// preceding layover — it starts the pairing at DXB).
+  layoverMinutesBefore Int?
+
+  @@unique([pairingId, sequence])
+  @@index([flightInstanceId])
+}
+
+/// One roster (one calendar month) being manually assembled.
+model RosterMonth {
+  id    String @id @default(cuid())
+  year  Int
+  month Int // 1-12
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entries RosterEntry[]
+
+  @@unique([year, month])
+}
+
+/// One calendar day's assigned duty within a RosterMonth.
+///
+/// DESIGN CHOICE (see docs/pairing-assumptions.md): a multi-day pairing
+/// occupies `spansDays` consecutive calendar cells, with exactly ONE
+/// RosterEntry row — placed on the pairing's start date — carrying
+/// `pairingId` and `spansDays`. The days a pairing spans beyond its start
+/// date do NOT get their own RosterEntry rows; the UI derives which cells
+/// are "occupied by pairing X, day N of spansDays" by reading this single
+/// row (see src/pairing/rosterGrid.ts). This was chosen over "one row per
+/// calendar day, every day carrying pairingId + a day-index" because it
+/// keeps assigning/removing a pairing a single-row write instead of an
+/// N-row transaction, and avoids N rows that must always agree with each
+/// other about which pairing/day-index they represent.
+model RosterEntry {
+  id            String      @id @default(cuid())
+  rosterMonthId String
+  rosterMonth   RosterMonth @relation(fields: [rosterMonthId], references: [id], onDelete: Cascade)
+
+  /// Calendar date (00:00 UTC) this entry starts on.
+  date DateTime
+
+  /// One of: FLIGHT | OFF | STANDBY | SIM | GROUND_SCHOOL | VACATION
+  /// (String, not a Prisma enum — see the SQLite/enum deviation note above
+  /// Flight; constrained at the app layer by src/pairing/types.ts's
+  /// `DutyType` union.)
+  dutyType String
+
+  /// Set only when dutyType === 'FLIGHT'.
+  pairingId String?
+  pairing   Pairing? @relation(fields: [pairingId], references: [id])
+
+  /// Set only when dutyType === 'FLIGHT': how many consecutive calendar
+  /// days (starting at `date`) this pairing occupies. 1 for a same-day
+  /// out-and-back, 2+ for a pairing with layover(s).
+  spansDays Int?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([rosterMonthId, date])
+  @@index([pairingId])
 }

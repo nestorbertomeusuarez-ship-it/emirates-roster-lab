@@ -39,28 +39,81 @@ of this file.
 
 ## Phase 2 — Pairing engine
 
-**Status: not started.**
+**Status: built (this build).**
 
-- DXB-based pairing generator built from ingested flights plus constraints
-  (fleet, max trip duration, min/max layover).
-- Manual drag-and-drop calendar constructor as an alternative/override path.
-- Explicit, separate concepts: report time, block time, duty time, FDP,
-  rest, layover — not conflated.
-- Default report time (STD − 90 min) is an **ASSUMPTION**, not confirmed
-  data — must be logged in `docs/assumptions.md` when this phase starts.
+Built, under `src/pairing/`, zero dependency on `@prisma/client` for the
+pure algorithm modules (mirrors `src/ftl/`'s discipline — Prisma access is
+confined to `src/pairing/db/`):
+
+1. **`expandScheduleToInstances.ts`** — expands Phase 1's recurring Flight
+   schedule lines into dated instances for a requested month, respecting
+   `daysOfWeek`/`effectiveFrom`/`effectiveTo`. Pure, tested (partial-month
+   overlap, excluded weekdays, zero-operating-days edge cases).
+2. **`generatePairings.ts`** — bounded DFS pairing search: DXB-based,
+   fleet-type-consistent (same aircraft type across every leg — an
+   assumption, see `docs/pairing-assumptions.md`), configurable
+   `maxTripDays`/`minLayoverMinutes`/`maxLayoverMinutes`. Pure, tested
+   (simple out-and-back, layover-too-short/too-long exclusion,
+   `maxTripDays` pruning, mixed-fleet-type exclusion, a 3-leg
+   multi-outstation chain).
+3. **`dutyTimes.ts`** — report time (STD − configurable offset, default 90
+   min, flagged as an assumption), block-time aggregation, duty/FDP
+   minutes, layover minutes, rest minutes — kept as separate named
+   functions per this phase's working rule below. Pure, tested.
+4. **`toFlightDutyPeriod.ts`** — bridges an assembled day's duty into
+   Phase 3's `FlightDutyPeriod`/`RestPeriodInput` shapes so
+   `evaluateDuty()` can run against real generated pairings. Defaults to a
+   plain 2-pilot crew (ULR/augmented-crew modeling out of scope — already
+   flagged `OPERATOR_SPECIFIC` in Phase 3). Tested, including an
+   integration test that generates a real pairing, converts it, and runs
+   it through the actual Phase 3 `evaluateDuty()`.
+5. **Prisma schema additions** (additive migration
+   `20260914131942_phase2_pairings`, non-destructive — Phase 1's seed data
+   was preserved) — `FlightInstance` (persisted, idempotently
+   generated/cached per requested month, never eagerly materialized),
+   `Pairing`/`PairingLeg` (persisted only for pairings a user actually
+   assigns — candidates are generated on demand and never written),
+   `RosterMonth`/`RosterEntry` (one row per pairing assignment, carrying
+   `spansDays` for multi-day trips, rather than one row per occupied
+   calendar day). Full rationale for every schema shape decision is in the
+   models' doc comments in `prisma/schema.prisma` and in
+   `docs/pairing-assumptions.md`.
+6. **Manual roster constructor UI** —
+   `src/app/roster/[year]/[month]/page.tsx`: a simple 7-column month grid,
+   click-to-assign duty per day via Server Actions. Deliberately NOT
+   drag-and-drop — that polish is Phase 5's job (see below); this only
+   needed to prove the pairing engine works end-to-end and give a working,
+   if plain, manual assembly path.
+7. **`docs/pairing-assumptions.md`** — every judgment call this phase
+   introduced, with reasoning (report-offset default, UTC-vs-local-day
+   `daysOfWeek` reading, fleet-type-consistency, 2-pilot default,
+   FDP-boundary convention, and the two implementation-shape decisions
+   above).
+
+Explicit, separate concepts throughout — report time, block time, duty
+time, FDP, rest, layover — are implemented as distinct named functions in
+`dutyTimes.ts`, never conflated.
 
 ## Phase 3 — GCAA rules engine
 
 **Status: rules-engine LIBRARY built and tested (this build). User
 sign-off for this phase was given explicitly this session, after a
 multi-round research verification pass against the current primary
-source (see `docs/gcaa-sources.md`).**
+source (see `docs/gcaa-sources.md`). Now wired to real pairing data by
+Phase 2 (this build) — see below.**
 
-This phase built a **pure, tested library only** — not the pairing
-generator (Phase 2, still not started) and not the UI (Phase 5, still not
-started). It operates on a minimal, self-contained `FlightDutyPeriod` /
-`RestPeriodInput` / `CumulativeTotals` input shape (`src/ftl/types.ts`);
-Phase 2 will wire real pairing data into it later.
+This phase built a **pure, tested library only** — the wiring lives in
+Phase 2, not here; this remains a standalone evaluator with no knowledge
+of pairings, Prisma, or the UI. It operates on a minimal, self-contained
+`FlightDutyPeriod` / `RestPeriodInput` / `CumulativeTotals` input shape
+(`src/ftl/types.ts`). Phase 2's `src/pairing/toFlightDutyPeriod.ts` is the
+bridge that populates that shape from a real generated pairing and calls
+`evaluateDuty()` — proven end-to-end by an integration test
+(`src/pairing/toFlightDutyPeriod.test.ts`) that generates an actual
+pairing, converts it, and asserts a well-formed, non-crashing result. The
+Phase 5 UI's traffic-light compliance panel (still not started) is what
+will surface `evaluateDuty()`'s output to the user; Phase 2 only proves
+the plumbing works, it doesn't render it.
 
 Done, under `src/ftl/`, zero dependency on `@prisma/client` or
 `src/ingest/`:
@@ -93,9 +146,10 @@ Done, under `src/ftl/`, zero dependency on `@prisma/client` or
 
 Remaining for later phases (not done here, out of scope for Phase 3):
 
-- **Wiring into real pairing/duty data** — depends on Phase 2 (pairing
-  engine), not yet built. This library's `FlightDutyPeriod` shape is
-  intentionally minimal/self-contained until then.
+- **Wiring into real pairing/duty data** — done by Phase 2
+  (`src/pairing/toFlightDutyPeriod.ts`), see above. This library's
+  `FlightDutyPeriod` shape stays minimal/self-contained; Phase 2 owns
+  translating a real pairing into it.
 - **The traffic-light compliance panel UI** — Phase 5, not yet started.
 
 ## Phase 4 — Payroll & metrics
