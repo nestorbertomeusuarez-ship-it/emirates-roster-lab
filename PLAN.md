@@ -49,18 +49,54 @@ of this file.
 - Default report time (STD − 90 min) is an **ASSUMPTION**, not confirmed
   data — must be logged in `docs/assumptions.md` when this phase starts.
 
-## Phase 3 — GCAA validator
+## Phase 3 — GCAA rules engine
 
-**Status: NOT STARTED — explicitly blocked on user sign-off before any
-code is written for this phase. Do not begin implementation.**
+**Status: rules-engine LIBRARY built and tested (this build). User
+sign-off for this phase was given explicitly this session, after a
+multi-round research verification pass against the current primary
+source (see `docs/gcaa-sources.md`).**
 
-- Flight/duty time limitations and rest requirements sourced from UAE GCAA
-  CAR OPS 1 and applicable CARs — sourced, cited, and dated from
-  gcaa.gov.ae, never from memory.
-- Rules encoded as typed data under `rules/gcaa/`, each with unit tests.
-- Anything not found in the public regulatory text gets marked
-  `OPERATOR_SPECIFIC` rather than guessed.
-- Output: traffic-light compliance status per duty.
+This phase built a **pure, tested library only** — not the pairing
+generator (Phase 2, still not started) and not the UI (Phase 5, still not
+started). It operates on a minimal, self-contained `FlightDutyPeriod` /
+`RestPeriodInput` / `CumulativeTotals` input shape (`src/ftl/types.ts`);
+Phase 2 will wire real pairing data into it later.
+
+Done, under `src/ftl/`, zero dependency on `@prisma/client` or
+`src/ingest/`:
+
+1. **Acclimatisation** (ORO.FTL.115.G(1)) — `rules/acclimatisation.ts`.
+2. **Max FDP tables A/B** (ORO.FTL.255.G(c)) — `rules/fdpTables.ts`.
+3. **Two-pilot sector-length factoring** (ORO.FTL.260.G) —
+   `rules/sectorFactoring.ts`.
+4. **Commander's discretion** (ORO.FTL.230.G) and **split duty extension**
+   (ORO.FTL.220.G) — `rules/discretion.ts`.
+5. **In-flight relief / augmented crew rest** (ORO.FTL.215.G(e)) —
+   `rules/inFlightRest.ts`.
+6. **Minimum rest**, flight crew (ORO.FTL.225.G) and cabin crew
+   (ORO.FTL.265.G(b)) — `rules/minRest.ts`.
+7. **Cumulative limits** (ORO.FTL.200.G) — `rules/cumulativeLimits.ts`.
+8. **Duty cycle and days off** (ORO.FTL.205.G) — `rules/daysOff.ts`.
+9. **Explicit `OPERATOR_SPECIFIC` placeholders** for what is not publicly
+   published (Emirates' confidential ULR FTL Variation scheme, a more
+   granular augmented-crew-rest table, carrier-specific pairing/standby
+   limits) — `rules/operatorSpecific.ts`. These always return
+   `isOperatorSpecific: true` and default to `AMBER` unless the caller
+   supplies an explicit operator-configured override.
+10. **`evaluateDuty()` / `overallSeverity()`** entry point —
+    `evaluate.ts` — runs every applicable rule and produces the
+    traffic-light (`GREEN`/`AMBER`/`RED`) result set per duty.
+11. Full citation trail and the exact list of `OPERATOR_SPECIFIC` gaps —
+    `docs/gcaa-sources.md`. Judgment calls made while encoding the tables
+    (e.g. Table B's rest-band boundary handling) are logged there, not
+    buried silently in code.
+
+Remaining for later phases (not done here, out of scope for Phase 3):
+
+- **Wiring into real pairing/duty data** — depends on Phase 2 (pairing
+  engine), not yet built. This library's `FlightDutyPeriod` shape is
+  intentionally minimal/self-contained until then.
+- **The traffic-light compliance panel UI** — Phase 5, not yet started.
 
 ## Phase 4 — Payroll & metrics
 
