@@ -1,0 +1,76 @@
+// Emirates Roster Lab — Prisma schema (Phase 1: data ingestion)
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// DEVIATION FROM SPEC: the spec's draft schema declared `enum SourceType` and
+// `enum TypeConfidence`. SQLite's Prisma connector does not support native
+// enum types (Prisma error P1012: "the current connector does not support
+// enums"), so this is not something Prisma can generate migrations for on
+// SQLite. Modeled as `String` columns instead, constrained at the application
+// layer by the matching TypeScript string-literal unions in
+// src/ingest/types.ts (`RawFlightRecord.confidence`, `IngestResult.source`)
+// and validated on every write path (zod schemas in the ingest sources,
+// plus the literal values used in prisma/seed.ts and writeToDb.ts).
+// SourceType values: MANUAL_CSV | MANUAL_JSON | AERODATABOX | SEED
+// TypeConfidence values: CONFIRMED | ADVERTISED | UNKNOWN
+
+model Airport {
+  id        String   @id @default(cuid())
+  iata      String   @unique
+  icao      String?  @unique
+  name      String?
+  lat       Float
+  lon       Float
+  tz        String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  departures Flight[] @relation("DepartureAirport")
+  arrivals   Flight[] @relation("ArrivalAirport")
+}
+
+model Flight {
+  id     String @id @default(cuid())
+  number String
+
+  depAirportId String
+  arrAirportId String
+  depAirport   Airport @relation("DepartureAirport", fields: [depAirportId], references: [id])
+  arrAirport   Airport @relation("ArrivalAirport", fields: [arrAirportId], references: [id])
+
+  stdUTCMin        Int
+  staUTCMin        Int
+  arrivalDayOffset Int @default(0)
+  blockTimeMin     Int
+
+  advertisedType String
+  observedType   String?
+  /// One of: CONFIRMED | ADVERTISED | UNKNOWN (see deviation note above)
+  confidence     String @default("ADVERTISED")
+
+  daysOfWeek    String
+  effectiveFrom DateTime
+  effectiveTo   DateTime
+
+  /// One of: MANUAL_CSV | MANUAL_JSON | AERODATABOX | SEED (see deviation note above)
+  source     String
+  sourceRef  String?
+  capturedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([number, depAirportId, arrAirportId, stdUTCMin, daysOfWeek, effectiveFrom, effectiveTo, source], name: "flight_natural_key")
+  @@index([number])
+  @@index([depAirportId, arrAirportId])
+  @@index([effectiveFrom, effectiveTo])
+  @@index([confidence])
+}

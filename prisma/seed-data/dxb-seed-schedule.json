@@ -1,0 +1,37 @@
+[
+  { "number": "EK001", "depIata": "DXB", "arrIata": "LHR", "stdUTCMin": 470, "staUTCMin": 925, "arrivalDayOffset": 0, "advertisedType": "A380", "observedType": "A380", "confidence": "CONFIRMED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-lhr-outbound" },
+  { "number": "EK002", "depIata": "LHR", "arrIata": "DXB", "stdUTCMin": 785, "staUTCMin": 1225, "arrivalDayOffset": 0, "advertisedType": "A380", "observedType": "A380", "confidence": "CONFIRMED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-lhr-return" },
+
+  { "number": "EK201", "depIata": "DXB", "arrIata": "JFK", "stdUTCMin": 500, "staUTCMin": 1395, "arrivalDayOffset": 0, "advertisedType": "A380", "observedType": "A380", "confidence": "CONFIRMED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-jfk-outbound" },
+  { "number": "EK202", "depIata": "JFK", "arrIata": "DXB", "stdUTCMin": 1350, "staUTCMin": 665, "arrivalDayOffset": 1, "advertisedType": "A380", "observedType": "A380", "confidence": "CONFIRMED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-jfk-return" },
+
+  { "number": "EK413", "depIata": "DXB", "arrIata": "SYD", "stdUTCMin": 30, "staUTCMin": 905, "arrivalDayOffset": 0, "advertisedType": "A380", "observedType": "A380", "confidence": "CONFIRMED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-syd-outbound" },
+  { "number": "EK414", "depIata": "SYD", "arrIata": "DXB", "stdUTCMin": 1435, "staUTCMin": 825, "arrivalDayOffset": 1, "advertisedType": "A380", "observedType": "A380", "confidence": "CONFIRMED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-syd-return" },
+
+  { "number": "EK503", "depIata": "DXB", "arrIata": "BOM", "stdUTCMin": 555, "staUTCMin": 760, "arrivalDayOffset": 0, "advertisedType": "A380", "observedType": "A380", "confidence": "CONFIRMED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-bom-outbound" },
+  { "number": "EK504", "depIata": "BOM", "arrIata": "DXB", "stdUTCMin": 990, "staUTCMin": 1185, "arrivalDayOffset": 0, "advertisedType": "A380", "observedType": "A380", "confidence": "CONFIRMED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-bom-return" },
+
+  { "number": "EK419", "depIata": "DXB", "arrIata": "SIN", "stdUTCMin": 500, "staUTCMin": 940, "arrivalDayOffset": 0, "advertisedType": "A380", "observedType": "A380", "confidence": "CONFIRMED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-sin-outbound" },
+  { "number": "EK420", "depIata": "SIN", "arrIata": "DXB", "stdUTCMin": 20, "staUTCMin": 445, "arrivalDayOffset": 0, "advertisedType": "A380", "observedType": "A380", "confidence": "CONFIRMED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-sin-return" },
+
+  { "number": "EK021", "depIata": "DXB", "arrIata": "EDI", "stdUTCMin": 545, "staUTCMin": 970, "arrivalDayOffset": 0, "advertisedType": "A350", "observedType": "A350", "confidence": "CONFIRMED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-edi-outbound" },
+  { "number": "EK022", "depIata": "EDI", "arrIata": "DXB", "stdUTCMin": 660, "staUTCMin": 1155, "arrivalDayOffset": 0, "advertisedType": "A350", "confidence": "ADVERTISED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-edi-return" },
+
+  { "number": "EK837", "depIata": "DXB", "arrIata": "BAH", "stdUTCMin": 460, "staUTCMin": 515, "arrivalDayOffset": 0, "advertisedType": "A350", "confidence": "ADVERTISED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-bah-outbound" },
+  { "number": "EK838", "depIata": "BAH", "arrIata": "DXB", "stdUTCMin": 635, "staUTCMin": 695, "arrivalDayOffset": 0, "advertisedType": "A350", "observedType": "A350", "confidence": "CONFIRMED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-bah-return" },
+
+  { "number": "EK861", "depIata": "DXB", "arrIata": "MCT", "stdUTCMin": 330, "staUTCMin": 380, "arrivalDayOffset": 0, "advertisedType": "A350", "confidence": "ADVERTISED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-mct-outbound" },
+  { "number": "EK862", "depIata": "MCT", "arrIata": "DXB", "stdUTCMin": 500, "staUTCMin": 555, "arrivalDayOffset": 0, "advertisedType": "A350", "observedType": "B77W", "confidence": "CONFIRMED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-mct-return-observed-swap" },
+
+  { "number": "EK905", "depIata": "DXB", "arrIata": "AMM", "stdUTCMin": 175, "staUTCMin": 400, "arrivalDayOffset": 0, "advertisedType": "A350", "confidence": "ADVERTISED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-amm-outbound" },
+  { "number": "EK906", "depIata": "AMM", "arrIata": "DXB", "stdUTCMin": 420, "staUTCMin": 670, "arrivalDayOffset": 0, "advertisedType": "A350", "observedType": "A350", "confidence": "CONFIRMED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-amm-return" },
+
+  { "number": "EK851", "depIata": "DXB", "arrIata": "KWI", "stdUTCMin": 490, "staUTCMin": 585, "arrivalDayOffset": 0, "advertisedType": "A350", "confidence": "ADVERTISED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-kwi-outbound" },
+  { "number": "EK852", "depIata": "KWI", "arrIata": "DXB", "stdUTCMin": 665, "staUTCMin": 765, "arrivalDayOffset": 0, "advertisedType": "A350", "confidence": "ADVERTISED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-kwi-return" },
+
+  { "number": "EK653", "depIata": "DXB", "arrIata": "CMB", "stdUTCMin": 40, "staUTCMin": 290, "arrivalDayOffset": 0, "advertisedType": "A350", "observedType": "A350", "confidence": "CONFIRMED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-cmb-outbound" },
+  { "number": "EK654", "depIata": "CMB", "arrIata": "DXB", "stdUTCMin": 480, "staUTCMin": 720, "arrivalDayOffset": 0, "advertisedType": "A350", "confidence": "ADVERTISED", "daysOfWeek": "1111111", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-cmb-return" },
+
+  { "number": "EK741", "depIata": "DXB", "arrIata": "TBS", "stdUTCMin": 15, "staUTCMin": 180, "arrivalDayOffset": 0, "advertisedType": "A350", "confidence": "ADVERTISED", "daysOfWeek": "1010101", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-tbs-outbound" },
+  { "number": "EK742", "depIata": "TBS", "arrIata": "DXB", "stdUTCMin": 290, "staUTCMin": 465, "arrivalDayOffset": 0, "advertisedType": "A350", "observedType": "A350", "confidence": "CONFIRMED", "daysOfWeek": "1010101", "effectiveFrom": "2026-02-01", "effectiveTo": "2026-02-28", "sourceRef": "seed:dxb-tbs-return" }
+]

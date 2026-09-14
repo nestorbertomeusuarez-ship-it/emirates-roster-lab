@@ -1,0 +1,9 @@
+number,dep_iata,arr_iata,std_utc,sta_utc,advertised_type,observed_type,confidence,days_of_week,effective_from,effective_to,notes
+EK001,DXB,LHR,07:50,15:25,A380,A380,CONFIRMED,1111111,2026-03-01,2026-03-31,"Example: confirmed A380 rotation"
+EK002,LHR,DXB,13:05,20:25,A380,A380,CONFIRMED,1111111,2026-03-01,2026-03-31,"Example: confirmed A380 rotation"
+EK021,DXB,EDI,09:05,16:10,A350,,ADVERTISED,1111111,2026-03-01,2026-03-31,"Example: advertised-only A350"
+EK022,EDI,DXB,11:00,19:15,A350,,,1111111,2026-03-01,2026-03-31,"Example: confidence left blank, defaults to ADVERTISED"
+EK201,DXB,JFK,08:20,23:15,A380,A380,CONFIRMED,1111111,2026-03-01,2026-03-31,"Example: long-haul same-day (no offset needed here)"
+EK202,JFK,DXB,22:30,11:05,A380,A380,CONFIRMED,1111111,2026-03-01,2026-03-31,"Example: overnight flight, arrival next UTC day"
+EK837,DXB,BAH,07:40,08:35,A350,,ADVERTISED,1111111,2026-03-01,2026-03-31,"Example: short regional sector"
+EK905,DXB,AMM,02:55,06:40,ZZ999,,ADVERTISED,1111111,2026-03-01,2026-03-31,"Example: unknown aircraft type triggers a warning, not an error"
