@@ -35,3 +35,11 @@ rest-location inference at pairing boundaries, the never-rest-checking-the-
 first-duty-of-the-month limitation, deterministic (not true-random)
 candidate ordering, and the FLIGHT/OFF-only auto-assignment scope. All
 logged in full, with reasoning, in `docs/roster-gen-assumptions.md`.
+
+Phase 5 Slice 1 (roster-state reconstruction plumbing, no UI) extended
+Phase 4's evaluator to a second input source: a roster reconstructed from
+what's actually PERSISTED in the DB (`src/roster-gen/db/loadRosterGenDays.ts`),
+not just a freshly-generated one. This introduced one further judgment
+call — non-FLIGHT duty types (STANDBY/SIM/GROUND_SCHOOL/VACATION) are
+treated as OFF-equivalent for that live re-evaluation — logged as item 11
+in `docs/roster-gen-assumptions.md`.
