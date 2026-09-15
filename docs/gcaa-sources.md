@@ -36,7 +36,7 @@ in the same document.
 | # | Rule area | Exact clause | Implementation |
 |---|---|---|---|
 | 1 | Acclimatisation | ORO.FTL.115.G(1) | `src/ftl/rules/acclimatisation.ts` |
-| 2 | Max FDP, Table A (acclimatised) / Table B (not acclimatised) | ORO.FTL.255.G(c) | `src/ftl/rules/fdpTables.ts` |
+| 2 | Max FDP, Table A (acclimatised) / Table B (not acclimatised) | ORO.FTL.255.G(c), page 444 of 461 | `src/ftl/rules/fdpTables.ts` |
 | 3 | Two-pilot sector-length factoring | ORO.FTL.260.G | `src/ftl/rules/sectorFactoring.ts` |
 | 4 | Commander's discretion | ORO.FTL.230.G | `src/ftl/rules/discretion.ts` (`evaluateCommanderDiscretion`) |
 | 5 | Split duty extension | ORO.FTL.220.G | `src/ftl/rules/discretion.ts` (`evaluateSplitDutyExtension`) |
@@ -111,3 +111,49 @@ skipped.
   explicitly for flight crew (ORO.FTL.225.G) but no analogous provision
   for cabin crew (ORO.FTL.265.G(b)) was in the verified text, so none is
   implemented. See `minRest.ts`.
+
+## Re-verification note (2026-09-15): `fdpTables.ts`'s sector-column structure
+
+An independent review of the rule engine flagged a plausible concern:
+EASA's own equivalent table (ORO.FTL.205/CS-FTL.1.205, publicly confirmed
+via the UK CAA Regulatory Library) merges sectors 1 and 2 into a single
+first column, with separate columns only from 3 sectors onward — raising
+the question of whether GCAA's ORO.FTL.255.G(c) table does the same, which
+would make `fdpTables.ts`'s direct `sectors - 1` column indexing off by one
+for every sector count from 2 upward.
+
+**Re-checked against the primary source itself**, page 444 of the exact
+PDF this project cites (`gcaa.gov.ae`, CAR-AIR OPS Part-ORO Issue 03),
+extracted via `pdftotext`. GCAA's actual published tables do **NOT** merge
+sectors 1 and 2 — Table A has 8 separate columns (1, 2, 3, 4, 5, 6, 7,
+"8 or more"), Table B has 7 separate columns (1, 2, 3, 4, 5, 6, "7 or
+more"), confirmed by the exact column headers as published:
+
+```
+Table A – Two or more Flight Crew - Acclimatised
+                                            Sectors
+  Local Time
+   of Start      1      2      3      4      5      6      7    8 or more
+ 06:00-07:59    13    12¼    11½    10¾     10     9½      9        9
+ 08:00-12:59    14    13¼    12½    11¾     11    10½     10       9½
+ 13:00-17:59    13    12¼    11½    10¾     10    09½      9        9
+ 18:00-21:59    12    11¼    10½    9¾       9      9      9        9
+ 22:00-05:59    11    10¼    09½     9       9      9      9        9
+
+Table B – Two or more Flight Crew - Not Acclimatised
+  Length of                                 Sectors
+  preceding
+ rest (hours)    1      2      3      4      5      6     7 or more
+ Up to 18 or
+   over 30      13    12¼    11½    10¾     10     9¼        9
+ Between 18
+   and 30      11½     11    10½    9¾       9      9        9
+```
+
+Every value in `TABLE_A_MINUTES`/`TABLE_B_MINUTES` was cross-checked
+against this transcription (converting HH:¼/½/¾ to minutes) and matches
+exactly, with no off-by-one anywhere. GCAA's table genuinely diverges from
+EASA's in this specific structural detail (no 1-2 merge) despite being
+closely modeled on it overall — this is not a bug, and `fdpTables.ts`
+required no changes. The review's concern was reasonable given EASA's
+table structure, but the primary source resolves it in the code's favor.

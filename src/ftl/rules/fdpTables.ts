@@ -15,6 +15,12 @@
  * `restHours > 30` as the first row (matching "up to 18h" being inclusive,
  * and "over 30h" being exclusive of 30h itself), and `18 < restHours <= 30`
  * as the second row. See `docs/gcaa-sources.md`.
+ *
+ * Re-verified 2026-09-15 against page 444 of the primary source PDF itself
+ * (not the more-familiar EASA equivalent, which merges sectors 1-2 into one
+ * column — GCAA's table does NOT do this, every value here was cross-
+ * checked against the actual published table and matches exactly; see the
+ * "Re-verification note" in `docs/gcaa-sources.md`).
  */
 
 import { gcaaCitation } from '../citation';
