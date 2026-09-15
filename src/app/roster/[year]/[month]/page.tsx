@@ -20,8 +20,13 @@ import {
 } from '@/pairing/db/roster';
 import { generatePairingsForMonth } from '@/pairing/db/pairings';
 import type { GeneratedPairing } from '@/pairing/types';
+import { loadRosterGenDaysForMonth } from '@/roster-gen/db/loadRosterGenDays';
+import { evaluateRosterDays } from '@/roster-gen/generateMonthlyRoster';
+import { getAirportTimeZones } from '@/lib/airportTimeZones';
 import DayCard from './DayCard';
+import CompliancePanel from './CompliancePanel';
 import { generateRosterAction } from './actions';
+import { buildDayCategoryMap, buildWorstSeverityMap } from './dayPresentation';
 
 const UI_PAIRING_CONSTRAINTS = {
   maxTripDays: 4,
@@ -84,6 +89,21 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
   const entries = await listRosterEntries(prisma, rosterMonth.id);
   const cells = buildRosterGrid(year, month, entries);
 
+  // Always-current itemized compliance panel (Phase 5 Slice 2) — reconstructs
+  // whatever is actually persisted for this month (manual or generated, via
+  // Slice 1's loadRosterGenDaysForMonth) and re-runs the real evaluator on
+  // every render, independent of the one-time genSummary banner above.
+  const rosterGenDays = await loadRosterGenDaysForMonth(prisma, rosterMonth.id, year, month);
+  const airportTimeZones = await getAirportTimeZones(prisma);
+  const complianceEvaluations = evaluateRosterDays(rosterGenDays, airportTimeZones);
+
+  // Phase 5 Slice 3 — per-day category (FLIGHT/DXB_OFF/LAYOVER) and
+  // worst-severity lookups for the calendar grid, built from the exact same
+  // data as the compliance panel above (see dayPresentation.ts) — no new
+  // evaluation.
+  const dayCategoryByDate = buildDayCategoryMap(rosterGenDays);
+  const worstSeverityByDate = buildWorstSeverityMap(complianceEvaluations);
+
   const pairings = await generatePairingsForMonth(prisma, year, month, UI_PAIRING_CONSTRAINTS);
   const candidatesByStartDate = new Map<string, GeneratedPairing[]>();
   for (const pairing of pairings) {
@@ -102,10 +122,6 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
       <h1 className="text-xl font-semibold mb-1">
         Roster — {year}-{String(month).padStart(2, '0')}
       </h1>
-      <p className="text-sm text-zinc-500 mb-1">
-        Personal planning tool, not an operational document — does not
-        replace the official roster or the operator&apos;s OM-A.
-      </p>
       <p className="text-xs text-zinc-400 mb-6">
         {pairings.length} candidate pairing{pairings.length === 1 ? '' : 's'} generated
         for this month (max {UI_PAIRING_CONSTRAINTS.maxTripDays} trip days,{' '}
@@ -179,6 +195,8 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
         </form>
       </section>
 
+      <CompliancePanel evaluations={complianceEvaluations} />
+
       <div className="grid grid-cols-7 gap-2 mb-2">
         {WEEKDAY_HEADERS.map((label) => (
           <div key={label} className="text-xs font-medium text-zinc-500 text-center">
@@ -202,6 +220,8 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
             isPairingContinuation={cell.isPairingContinuation}
             dayOfPairing={cell.dayOfPairing}
             candidates={candidatesByStartDate.get(cell.date) ?? []}
+            category={dayCategoryByDate.get(cell.date) ?? null}
+            severity={worstSeverityByDate.get(cell.date) ?? null}
           />
         ))}
       </div>

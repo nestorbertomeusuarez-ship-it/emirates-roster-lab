@@ -1,6 +1,9 @@
+import Link from 'next/link';
 import type { RosterEntry } from '@prisma/client';
 import type { GeneratedPairing } from '@/pairing/types';
 import { DUTY_TYPES } from '@/pairing/types';
+import type { Severity } from '@/ftl/types';
+import type { DayCategory } from './dayPresentation';
 import {
   assignPairingDutyAction,
   assignSimpleDutyAction,
@@ -16,7 +19,43 @@ interface DayCardProps {
   isPairingContinuation: boolean;
   dayOfPairing: number | null;
   candidates: GeneratedPairing[];
+  /**
+   * Phase 5 Slice 3 — this day's category (FLIGHT / DXB_OFF / LAYOVER), null
+   * only when the caller has no roster-gen day for this date at all (should
+   * not happen for a real month, but kept optional defensively).
+   */
+  category: DayCategory | null;
+  /**
+   * Phase 5 Slice 3 (part A) — this day's worst GCAA compliance severity,
+   * null when `evaluateRosterDays` produced no evaluation for this date
+   * (normal for LAYOVER/DXB_OFF days — see dayPresentation.ts).
+   */
+  severity: Severity | null;
 }
+
+const CATEGORY_BADGES: Record<DayCategory, { label: string; icon: string; className: string }> = {
+  FLIGHT: {
+    label: 'Flight',
+    icon: '✈',
+    className: 'bg-sky-100 text-sky-900 dark:bg-sky-900 dark:text-sky-100',
+  },
+  LAYOVER: {
+    label: 'Layover',
+    icon: '\u{1F319}',
+    className: 'bg-violet-100 text-violet-900 dark:bg-violet-900 dark:text-violet-100',
+  },
+  DXB_OFF: {
+    label: 'Off · DXB',
+    icon: '\u{1F3E0}',
+    className: 'bg-slate-100 text-slate-900 dark:bg-slate-700 dark:text-slate-100',
+  },
+};
+
+const SEVERITY_BADGES: Record<Severity, string> = {
+  RED: 'bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100',
+  AMBER: 'bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100',
+  GREEN: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100',
+};
 
 function summarizePairing(pairing: GeneratedPairing): string {
   const route = pairing.legs.map((leg) => leg.instance.depIata).concat(
@@ -44,24 +83,88 @@ export default function DayCard({
   isPairingContinuation,
   dayOfPairing,
   candidates,
+  category,
+  severity,
 }: DayCardProps) {
   const dayNumber = Number(date.slice(8, 10));
+  // Only show the category chip when a day actually carries a real
+  // assignment (an entry, or a continuation day of one) — an unassigned day
+  // has nothing decided yet and stays as plain "unassigned" text below,
+  // rather than presenting as a confirmed DXB day off (see
+  // docs/roster-gen-assumptions.md item 12).
+  const categoryBadge = category && (entry || isPairingContinuation) ? CATEGORY_BADGES[category] : null;
+
+  // Phase 5 Slice 4 — deep-link a FLIGHT-category day (an actual flying leg
+  // operates this exact date, per dayPresentation.ts#classifyDayCategory)
+  // to its pairing's full leg-by-leg timeline. Both the pairing's start day
+  // and any later continuation day within the same pairing can be
+  // FLIGHT-category (a multi-leg pairing may fly on more than one of its
+  // days) — `entry` is the same RosterEntry row (and so the same
+  // `pairingId`) in both cases, since only the start day gets its own row
+  // (see prisma/schema.prisma's RosterEntry doc comment).
+  const pairingHref =
+    category === 'FLIGHT' && entry?.dutyType === 'FLIGHT' && entry.pairingId
+      ? `/roster/${year}/${month}/pairing/${entry.pairingId}`
+      : null;
 
   return (
     <div className="border rounded p-2 min-h-[9rem] flex flex-col gap-1 text-xs">
       <div className="font-semibold text-sm">{dayNumber}</div>
 
+      {(categoryBadge || severity) && (
+        <div className="flex flex-wrap gap-1">
+          {categoryBadge && (
+            <span
+              className={`rounded px-1 py-0.5 inline-flex items-center gap-0.5 ${categoryBadge.className}`}
+              title={`Day category: ${categoryBadge.label}`}
+            >
+              <span aria-hidden="true">{categoryBadge.icon}</span>
+              {categoryBadge.label}
+            </span>
+          )}
+          {severity && (
+            <span
+              className={`rounded px-1 py-0.5 font-semibold ${SEVERITY_BADGES[severity]}`}
+              title={`Worst GCAA compliance severity: ${severity}`}
+            >
+              {severity}
+            </span>
+          )}
+        </div>
+      )}
+
       {isPairingContinuation ? (
-        <div className="rounded bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100 px-1 py-0.5">
-          Pairing cont&apos;d (day {dayOfPairing})
-        </div>
+        pairingHref ? (
+          <Link
+            href={pairingHref}
+            className="rounded bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100 px-1 py-0.5 block underline"
+          >
+            Pairing cont&apos;d (day {dayOfPairing})
+          </Link>
+        ) : (
+          <div className="rounded bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100 px-1 py-0.5">
+            Pairing cont&apos;d (day {dayOfPairing})
+          </div>
+        )
       ) : entry ? (
-        <div className="rounded bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 px-1 py-0.5">
-          {entry.dutyType}
-          {entry.dutyType === 'FLIGHT' && entry.spansDays
-            ? ` (${entry.spansDays}d)`
-            : ''}
-        </div>
+        pairingHref ? (
+          <Link
+            href={pairingHref}
+            className="rounded bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 px-1 py-0.5 block underline"
+          >
+            {entry.dutyType}
+            {entry.dutyType === 'FLIGHT' && entry.spansDays
+              ? ` (${entry.spansDays}d)`
+              : ''}
+          </Link>
+        ) : (
+          <div className="rounded bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 px-1 py-0.5">
+            {entry.dutyType}
+            {entry.dutyType === 'FLIGHT' && entry.spansDays
+              ? ` (${entry.spansDays}d)`
+              : ''}
+          </div>
+        )
       ) : (
         <div className="text-zinc-400">unassigned</div>
       )}
