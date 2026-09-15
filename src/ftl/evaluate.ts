@@ -27,7 +27,7 @@ import type {
 } from './types';
 import { factoredSectors } from './rules/sectorFactoring';
 import { FDP_TABLE_CITATION, maxFdpMinutes } from './rules/fdpTables';
-import { evaluateInFlightRest } from './rules/inFlightRest';
+import { evaluateInFlightRest, IN_FLIGHT_REST_CITATION } from './rules/inFlightRest';
 import { evaluateMinRest } from './rules/minRest';
 import { evaluateCumulativeLimits } from './rules/cumulativeLimits';
 import { evaluateDaysOff } from './rules/daysOff';
@@ -51,7 +51,20 @@ export function overallSeverity(evaluations: RuleEvaluation[]): Severity {
   );
 }
 
-function evaluateFdpTable(fdp: FlightDutyPeriod): RuleEvaluation {
+interface FdpTableResult {
+  evaluation: RuleEvaluation;
+  /**
+   * The un-augmented max FDP this duty's table lookup produced, or `null`
+   * if the lookup itself threw (e.g. an invalid sector count) — `null`
+   * propagates to `evaluateDuty` so the in-flight-rest check (which needs
+   * this same base figure, see `rules/inFlightRest.ts`) can degrade
+   * gracefully instead of computing the lookup a second time and possibly
+   * throwing uncaught.
+   */
+  maxMinutes: number | null;
+}
+
+function evaluateFdpTable(fdp: FlightDutyPeriod): FdpTableResult {
   try {
     const sectorsForLookup = factoredSectors(
       fdp.scheduledSectorLengthsMin,
@@ -67,24 +80,33 @@ function evaluateFdpTable(fdp: FlightDutyPeriod): RuleEvaluation {
 
     if (fdp.actualOrPlannedFdpMinutes === undefined) {
       return {
-        citation: FDP_TABLE_CITATION,
-        severity: 'GREEN',
-        message: `Maximum permitted FDP for this duty is ${maxMinutes} min (${sectorsForLookup} lookup sectors, ${fdp.isAcclimatised ? 'Table A' : 'Table B'}). No actual/planned FDP duration was supplied, so this is informational only.`,
+        evaluation: {
+          citation: FDP_TABLE_CITATION,
+          severity: 'GREEN',
+          message: `Maximum permitted FDP for this duty is ${maxMinutes} min (${sectorsForLookup} lookup sectors, ${fdp.isAcclimatised ? 'Table A' : 'Table B'}). No actual/planned FDP duration was supplied, so this is informational only.`,
+        },
+        maxMinutes,
       };
     }
 
     const marginMinutes = maxMinutes - fdp.actualOrPlannedFdpMinutes;
     return {
-      citation: FDP_TABLE_CITATION,
-      severity: marginMinutes < 0 ? 'RED' : 'GREEN',
-      message: `Planned FDP (${fdp.actualOrPlannedFdpMinutes} min) against a maximum of ${maxMinutes} min (${sectorsForLookup} lookup sectors, ${fdp.isAcclimatised ? 'Table A' : 'Table B'}).`,
-      marginMinutes,
+      evaluation: {
+        citation: FDP_TABLE_CITATION,
+        severity: marginMinutes < 0 ? 'RED' : 'GREEN',
+        message: `Planned FDP (${fdp.actualOrPlannedFdpMinutes} min) against a maximum of ${maxMinutes} min (${sectorsForLookup} lookup sectors, ${fdp.isAcclimatised ? 'Table A' : 'Table B'}).`,
+        marginMinutes,
+      },
+      maxMinutes,
     };
   } catch (error) {
     return {
-      citation: FDP_TABLE_CITATION,
-      severity: 'RED',
-      message: `Could not evaluate FDP limit: ${error instanceof Error ? error.message : String(error)}`,
+      evaluation: {
+        citation: FDP_TABLE_CITATION,
+        severity: 'RED',
+        message: `Could not evaluate FDP limit: ${error instanceof Error ? error.message : String(error)}`,
+      },
+      maxMinutes: null,
     };
   }
 }
@@ -108,26 +130,32 @@ export function evaluateDuty(
 ): RuleEvaluation[] {
   const evaluations: RuleEvaluation[] = [];
 
-  evaluations.push(evaluateFdpTable(fdp));
+  const fdpTableResult = evaluateFdpTable(fdp);
+  evaluations.push(fdpTableResult.evaluation);
 
   if (fdp.inFlightRestMinutes !== undefined && fdp.inFlightRestFacility !== undefined) {
-    evaluations.push(
-      evaluateInFlightRest({
-        plannedFdpMinutes:
-          fdp.actualOrPlannedFdpMinutes ??
-          // Fall back to the computed table max so the check still runs
-          // informationally when no actual duration is known yet.
-          maxFdpMinutes(
-            fdp.reportLocalTime,
-            factoredSectors(fdp.scheduledSectorLengthsMin, fdp.crewCount, fdp.isAcclimatised),
-            fdp.isAcclimatised,
-            fdp.precedingRestHours
-          ),
-        totalRestMinutesTaken: fdp.inFlightRestMinutes,
-        facility: fdp.inFlightRestFacility,
-        role: fdp.role,
-      })
-    );
+    if (fdpTableResult.maxMinutes === null) {
+      // The base-FDP-table lookup itself failed (see evaluateFdpTable's own
+      // RED evaluation, already pushed above, for the error) — the
+      // in-flight-rest extension has no base to add to, so it can't be
+      // evaluated either.
+      evaluations.push({
+        citation: IN_FLIGHT_REST_CITATION,
+        severity: 'RED',
+        message:
+          'Could not evaluate the in-flight-rest FDP extension: the base FDP-table maximum could not be computed for this duty (see the FDP table evaluation above for the underlying error).',
+      });
+    } else {
+      evaluations.push(
+        evaluateInFlightRest({
+          plannedFdpMinutes: fdp.actualOrPlannedFdpMinutes ?? fdpTableResult.maxMinutes,
+          totalRestMinutesTaken: fdp.inFlightRestMinutes,
+          facility: fdp.inFlightRestFacility,
+          role: fdp.role,
+          baseFdpMinutes: fdpTableResult.maxMinutes,
+        })
+      );
+    }
   }
 
   if (rest !== null) {

@@ -405,3 +405,46 @@ like item 12's LAYOVER classification — it does NOT change
 `classifyDayCategory`, `RosterGenDay`, or `evaluateRosterDays` in any way;
 a STANDBY/SIM/GROUND_SCHOOL/VACATION day is still evaluated as OFF-equivalent
 per item 11, only the calendar badge's label changed.
+
+## 18. BUGFIX: `evaluateInFlightRest` (ORO.FTL.215.G(e)) compared against the wrong bound — confirmed false GREEN, found and fixed this session
+
+Found by an independent review pass over the core rule engine (Phase 3
+`src/ftl/rules/*.ts`), never previously cross-checked by a separate
+reviewer — each rule was built and self-verified by whichever session
+originally wrote it. This is a genuine correctness bug, not a documented
+scope limitation like most other items in this file.
+
+**The bug**: `evaluateInFlightRest` computed the correctly-derived allowance
+(`maxAllowedFdpMinutes = min(baseFdp + extension, absoluteCap)`) but then
+checked severity against `capMinutes` (the absolute ceiling) ALONE, not
+against `maxAllowedFdpMinutes`. Worse, `maxAllowedFdpMinutes` itself used
+`MIN_REST_FOR_EXTENSION_MIN` (the 3h rest-eligibility floor) in place of an
+actual base FDP figure — there was no base FDP available at the call site at
+all. Net effect: any planned FDP under the absolute ceiling (18h/19h bunk,
+15h/16h seat) was approved GREEN regardless of how little in-flight rest was
+actually taken, as long as it cleared the 3h eligibility floor. Confirmed
+by the project's own pre-existing test, which asserted GREEN for a 10h
+planned FDP with only the 3h rest floor taken — the real
+`ORO.FTL.215.G(e)` formula (base FDP + extension) only justifies about half
+that.
+
+**The fix**: `evaluateInFlightRest` now takes a required `baseFdpMinutes`
+parameter — the un-augmented max FDP from the FDP tables
+(`fdpTables.ts#maxFdpMinutes`) — and checks `plannedFdpMinutes` against
+`min(baseFdpMinutes + extensionMinutes, capMinutes)`, matching the formula
+exactly. `src/ftl/evaluate.ts#evaluateDuty` already computed this exact
+base-FDP figure for `evaluateFdpTable` (Table A/B) and, separately, as a
+`plannedFdpMinutes` fallback when calling the in-flight-rest check — it
+just never threaded it through as the base for the EXTENSION formula.
+`evaluateFdpTable` now returns its computed `maxMinutes` (or `null` on a
+lookup failure) alongside its `RuleEvaluation`, computed once and reused for
+both checks rather than recomputed a second time (which also fixes a
+pre-existing gap where a `factoredSectors`/`maxFdpMinutes` failure at the
+in-flight-rest call site — not caught anywhere — could have thrown
+uncaught out of `evaluateDuty`; it now degrades to a RED "could not
+evaluate" result instead, matching `evaluateFdpTable`'s own error handling).
+
+No open item's real-world impact was assessed further than what the review
+already established (see the review's own scenario: ULR augmented crew,
+short-report-time duty, 3h rest taken, previously approved a 15h duty the
+formula only justified to 11.5h) — this fix directly closes that gap.
