@@ -12,11 +12,7 @@ export default function RosterIndexPage() {
 
   return (
     <main className="p-6 max-w-xl mx-auto">
-      <h1 className="text-xl font-semibold mb-1">Roster planner</h1>
-      <p className="text-sm text-zinc-500 mb-6">
-        Personal planning tool, not an operational document — does not
-        replace the official roster or the operator&apos;s OM-A.
-      </p>
+      <h1 className="text-xl font-semibold mb-6">Roster planner</h1>
 
       <a
         href={`/roster/${defaultYear}/${defaultMonth}`}
