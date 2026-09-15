@@ -28,7 +28,11 @@ interface DayCardProps {
   /**
    * Phase 5 Slice 3 (part A) — this day's worst GCAA compliance severity,
    * null when `evaluateRosterDays` produced no evaluation for this date
-   * (normal for LAYOVER/DXB_OFF days — see dayPresentation.ts).
+   * (normal for LAYOVER/DXB_OFF days — see dayPresentation.ts). When set,
+   * rendered as a `#YYYY-MM-DD` anchor link down to this date's detail in
+   * `CompliancePanel` (see that component's `id={day.date}` on each day's
+   * group) — the calendar renders above the panel, so this is a real
+   * jump-to-detail link.
    */
   severity: Severity | null;
   /**
@@ -142,14 +146,19 @@ export default function DayCard({
         <input type="hidden" name="date" value={date} />
         <input type="hidden" name="year" value={year} />
         <input type="hidden" name="month" value={month} />
-        <select name="dutyType" className="border rounded flex-1 min-w-0" defaultValue="OFF">
+        <select
+          name="dutyType"
+          className="border rounded flex-1 min-w-0"
+          defaultValue="OFF"
+          aria-label={`Duty type for ${date}`}
+        >
           {DUTY_TYPES.filter((d) => d !== 'FLIGHT').map((d) => (
             <option key={d} value={d}>
               {d}
             </option>
           ))}
         </select>
-        <button type="submit" className="border rounded px-1">
+        <button type="submit" className="border rounded px-1" aria-label={`Set duty type for ${date}`}>
           Set
         </button>
       </form>
@@ -160,14 +169,18 @@ export default function DayCard({
           <input type="hidden" name="date" value={date} />
           <input type="hidden" name="year" value={year} />
           <input type="hidden" name="month" value={month} />
-          <select name="pairingIndex" className="border rounded flex-1 min-w-0">
+          <select
+            name="pairingIndex"
+            className="border rounded flex-1 min-w-0"
+            aria-label={`Pairing candidate for ${date}`}
+          >
             {candidates.map((pairing, index) => (
               <option key={index} value={index}>
                 {summarizePairing(pairing)}
               </option>
             ))}
           </select>
-          <button type="submit" className="border rounded px-1">
+          <button type="submit" className="border rounded px-1" aria-label={`Assign pairing for ${date}`}>
             Fly
           </button>
         </form>
@@ -179,7 +192,11 @@ export default function DayCard({
           <input type="hidden" name="date" value={date} />
           <input type="hidden" name="year" value={year} />
           <input type="hidden" name="month" value={month} />
-          <button type="submit" className="text-zinc-400 underline">
+          <button
+            type="submit"
+            className="text-zinc-400 underline"
+            aria-label={`Clear duty for ${date}`}
+          >
             clear
           </button>
         </form>
@@ -220,12 +237,14 @@ export default function DayCard({
             </span>
           )}
           {severity && (
-            <span
+            <Link
+              href={`#${date}`}
               className={`rounded px-1 py-0.5 font-semibold ${SEVERITY_BADGES[severity]}`}
-              title={`Worst GCAA compliance severity: ${severity}`}
+              title={`Worst GCAA compliance severity: ${severity} — jump to detail`}
+              aria-label={`Worst GCAA compliance severity ${severity} for ${date} — jump to compliance detail`}
             >
               {severity}
-            </span>
+            </Link>
           )}
         </div>
       )}
@@ -274,7 +293,10 @@ export default function DayCard({
           // and rejected as a bigger architectural change than this slice
           // calls for, since the native element already does the job.
           <details className="mt-0.5">
-            <summary className="cursor-pointer select-none text-zinc-500 dark:text-zinc-400 underline text-xs md:text-[10px]">
+            <summary
+              className="cursor-pointer select-none text-zinc-500 dark:text-zinc-400 underline text-xs md:text-[10px]"
+              aria-label={`Change duty for ${date}`}
+            >
               change
             </summary>
             <div className="flex flex-col gap-1.5 md:gap-1 mt-1">{reassignmentForms}</div>

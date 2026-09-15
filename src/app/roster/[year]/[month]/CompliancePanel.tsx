@@ -85,7 +85,7 @@ export default function CompliancePanel({ evaluations }: CompliancePanelProps) {
       ) : (
         <ul className="flex flex-col gap-2">
           {grouped.map((day) => (
-            <li key={day.date}>
+            <li key={day.date} id={day.date}>
               <div className="font-medium mb-1">{day.date}</div>
               <ul className="flex flex-col gap-1">
                 {day.evaluations.map((evaluation) => (

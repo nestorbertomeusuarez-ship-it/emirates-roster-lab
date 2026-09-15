@@ -20,6 +20,7 @@ import {
   listRosterEntries,
 } from '@/pairing/db/roster';
 import { generatePairingsForMonth } from '@/pairing/db/pairings';
+import { countFlightInstancesForMonth } from '@/pairing/db/flightInstances';
 import type { GeneratedPairing } from '@/pairing/types';
 import { loadRosterGenDaysForMonth } from '@/roster-gen/db/loadRosterGenDays';
 import { evaluateRosterDays } from '@/roster-gen/generateMonthlyRoster';
@@ -30,6 +31,7 @@ import CompliancePanel from './CompliancePanel';
 import { generateRosterAction } from './actions';
 import { buildDayCategoryMap, buildWorstSeverityMap } from './dayPresentation';
 import { nextMonth, previousMonth } from './adjacentMonth';
+import { hasNoScheduleDataForMonth } from './emptyScheduleData';
 
 const UI_PAIRING_CONSTRAINTS = {
   maxTripDays: 4,
@@ -121,6 +123,16 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
     candidatesByStartDate.set(pairing.startServiceDate, bucket);
   }
 
+  // Phase 5 UX audit item 3 — distinguishes "nothing was ever seeded for
+  // this month" from "seeded but nothing assigned yet" (the latter is
+  // already handled by CompliancePanel's own empty state). Counted AFTER
+  // generatePairingsForMonth above, which has already called
+  // ensureFlightInstancesForMonth and so materialized every FlightInstance
+  // this month's seed data actually covers — see emptyScheduleData.ts and
+  // flightInstances.ts#countFlightInstancesForMonth.
+  const flightInstanceCount = await countFlightInstancesForMonth(prisma, year, month);
+  const hasNoScheduleData = hasNoScheduleDataForMonth(flightInstanceCount, pairings.length);
+
   // Pad the grid to whole weeks (Mon-start) so it renders as a real
   // calendar, not just a flat list of day cells.
   const firstDayIso = cells[0]?.date ?? `${year}-${String(month).padStart(2, '0')}-01`;
@@ -169,6 +181,15 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
         layover window, same-fleet-type-per-pairing assumption — see
         docs/pairing-assumptions.md).
       </p>
+
+      {hasNoScheduleData && (
+        <div className="rounded border border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-100 px-3 py-2 mb-4 text-sm">
+          No flight schedule data exists for this month &mdash; the seeded schedule does not
+          cover {year}-{String(month).padStart(2, '0')}. There is nothing to generate pairings
+          from or evaluate for compliance here; this is different from a covered month with
+          nothing assigned yet.
+        </div>
+      )}
 
       {/*
         Responsive layout: below `md` there is no room for 7 fixed-width

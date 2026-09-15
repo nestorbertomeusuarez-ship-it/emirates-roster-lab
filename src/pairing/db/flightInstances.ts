@@ -120,3 +120,28 @@ export async function ensureFlightInstancesForMonth(
     aircraftType: row.flight.observedType ?? row.flight.advertisedType,
   }));
 }
+
+/**
+ * Counts persisted `FlightInstance` rows for `year`/`month`, used by the
+ * Phase 5 UI (see `emptyScheduleData.ts`) to distinguish "no schedule data
+ * was ever seeded for this month" from "schedule data exists, nothing
+ * assigned yet". Callers should run this AFTER `ensureFlightInstancesForMonth`
+ * (or `generatePairingsForMonth`, which calls it) so a month that genuinely
+ * has covering `Flight` schedule lines has already had its instances
+ * materialized — otherwise this would undercount on a month's very first
+ * request.
+ */
+export async function countFlightInstancesForMonth(
+  prisma: PrismaClient,
+  year: number,
+  month: number
+): Promise<number> {
+  return prisma.flightInstance.count({
+    where: {
+      serviceDate: {
+        gte: new Date(Date.UTC(year, month - 1, 1)),
+        lte: new Date(Date.UTC(year, month, 0)),
+      },
+    },
+  });
+}
