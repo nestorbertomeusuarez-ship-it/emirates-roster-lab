@@ -43,3 +43,17 @@ not just a freshly-generated one. This introduced one further judgment
 call — non-FLIGHT duty types (STANDBY/SIM/GROUND_SCHOOL/VACATION) are
 treated as OFF-equivalent for that live re-evaluation — logged as item 11
 in `docs/roster-gen-assumptions.md`.
+
+This session's operator-specific-config change (no new phase number — a
+correctness fix within Phase 3/4/5's existing scope) introduced two further
+judgment calls, logged as items 14-15 in `docs/roster-gen-assumptions.md`:
+explicit `'none'`/`'not_used'` confirmation sentinels on
+`OperatorSpecificOverrides` (so a pilot's confirmed "no cap"/"standby not
+used" facts resolve GREEN instead of staying indistinguishable from
+unconfigured AMBER) wired through via one single hardcoded
+`src/ftl/operatorConfig.ts` constant (not a settings UI — this tool has
+exactly one user); and citing real, verified EASA CS-FTL.1.205(c) figures
+(corroborated via the UK CAA Regulatory Library) as an explicit public proxy
+in the ULR-FTL-variation-scheme and augmented-crew-rest-facility-table AMBER
+messages, without resolving either check to GREEN (no augmented-crew size
+default is assumed, per explicit user instruction).

@@ -264,3 +264,119 @@ Two judgment calls introduced by
   month(s) it was actually built for). Visiting the pairing's *other* month
   directly would show that month's own slice of the same pairing's
   evaluations instead.
+
+## 14. Confirmed operator facts for item 3 (pairing/standby limits): explicit sentinels, not silent defaults
+
+This pilot explicitly confirmed, in conversation, two real facts about their
+own operating environment (not GCAA-sourced, not guessed): no
+maximum-pairings-per-month cap applies to them, and standby duty is not part
+of their actual roster at all. These are genuine confirmed facts, not "we
+don't have data" — treating them the same as an unconfigured/unknown value
+(AMBER) would misrepresent something this pilot has already told the tool.
+
+**Sentinel semantics, not a silent default.** `OperatorSpecificOverrides`
+(`src/ftl/types.ts`) gives `maxPairingsPerMonth` and
+`standbyContactablePeriodDefinition` an explicit third state beyond
+"unconfigured" (`undefined`, stays AMBER) and "a real configured
+value/number" (GREEN, "using operator-configured value" wording): the
+literal string sentinel `'none'` / `'not_used'` (GREEN, "operator confirmed"
+wording). Without a distinct sentinel, "no cap configured" and "confirmed no
+cap exists" are indistinguishable from plain `undefined`, and either this
+pilot's confirmed fact would have to be silently defaulted into the type
+(losing the "confirmed" framing and blocking a genuinely unconfigured future
+user from ever seeing AMBER), or the check would have to stay AMBER forever
+despite a real answered question. `evaluateOperatorPairingAndStandbyLimits`
+(`src/ftl/rules/operatorSpecific.ts`) checks for the sentinel first, then
+falls back to "a real value was supplied," then AMBER — an *empty* overrides
+object (`{}`) still resolves AMBER, exactly as before this item, since
+neither the sentinel nor a real value is present.
+
+**Single hardcoded config file, not a settings UI.** Per `PLAN.md`'s own
+framing ("A personal planning tool for an Emirates A350/A380 pilot"), this
+app has exactly one user. `src/ftl/operatorConfig.ts` exports one constant,
+`EMIRATES_OPERATOR_CONFIG`, carrying this pilot's two confirmed facts as the
+sentinels above; `ulrFtlVariationMaxFdpMinutes` and
+`augmentedCrewRestFacilityMaxFdpMinutes` are left `undefined` in it (see
+item #15 below — no default crew size). A settings/config UI to let a user
+edit `OperatorSpecificOverrides` interactively was explicitly out of scope
+for this change — building one for a tool with exactly one, already-known
+user would be speculative generality. `OperatorSpecificOverrides` itself
+stays a general type, so a future multi-pilot version of this tool would
+only need to replace `operatorConfig.ts`'s wiring, not the type or the
+evaluators.
+
+**Wiring.** Before this change, nothing in the app ever passed
+`operatorConfig` to `evaluateDuty()` outside of direct unit tests —
+`generateMonthlyRoster.ts`'s own internal `evaluateDuty(fdp, rest,
+cumulative)` call (inside `evaluateRosterDays`) omitted the 4th argument
+entirely, so every operator-specific check always showed AMBER everywhere in
+the app regardless of what a caller might configure. This change threads an
+optional `operatorConfig?: OperatorSpecificOverrides` from
+`GenerateMonthlyRosterInput` through `generateMonthlyRoster` into both
+`evaluateRosterDays` calls it makes (construction-time candidate screening
+*and* the final independent verification pass — the same value, so this
+cannot itself cause the two passes to disagree) and into `evaluateRosterDays`
+itself, which was given the same new optional 3rd parameter and passes it on
+to `evaluateDuty`. `src/roster-gen/db/rosterGen.ts#buildMonthlyRosterForFleet`
+supplies `EMIRATES_OPERATOR_CONFIG` at the one real DB-aware call site that
+builds a fresh month. The two UI routes that call `evaluateRosterDays`
+directly on an already-persisted roster
+(`src/app/roster/[year]/[month]/page.tsx` and
+`src/app/roster/[year]/[month]/pairing/[pairingId]/page.tsx`) each import and
+pass `EMIRATES_OPERATOR_CONFIG` themselves — `loadRosterGenDaysForMonth`
+(`src/roster-gen/db/loadRosterGenDays.ts`) only reconstructs `RosterGenDay[]`
+from persisted data and never itself calls `evaluateDuty`/`evaluateRosterDays`,
+so it needed no change of its own.
+
+## 15. EASA CS-FTL.1.205(c) as an explicit public proxy for items 1/2 (ULR variation scheme, augmented-crew rest-facility table) — still AMBER, no crew-size default
+
+Per explicit user instruction this session ("if you can't find Emirates'
+exact number, base it on EASA and UK CAA since they're similar"), the AMBER
+default messages for `evaluateUlrFtlVariationScheme` and
+`evaluateAugmentedCrewRestFacilityTable` (`src/ftl/rules/operatorSpecific.ts`)
+now cite real, verified figures instead of purely vague wording: EASA
+CS-FTL.1.205(c)'s augmented-crew rest-facility -> max-FDP table, corroborated
+against the UK CAA Regulatory Library's own hosted copy of the same clause
+(both accessed 2026-09-15 — see `src/ftl/citation.ts#easaProxyCitation`).
+This pilot separately confirmed their rest facility is Class 1 (dedicated
+flat/near-flat bunk); the two Class 1 figures now cited are 960 min max FDP
+for a 3-pilot crew (+1) and 1020 min for a 4-pilot crew (+2). Class 2/3
+figures are also kept in `EASA_AUGMENTED_CREW_REST_FACILITY_TABLE` for
+traceability, since the source table has them, even though only Class 1 is
+cited in the message text.
+
+**This is a citation change to the message text only — it does NOT resolve
+either check to GREEN.** Two reasons this stays AMBER: (1) it is EASA/UK CAA
+public text, a different regulator from GCAA, corroborating what the closest
+available public data says — NOT Emirates' actual confidential/approved
+scheme, which remains unpublished; (2) this pilot's augmented-crew size (3
+vs. 4 pilots) varies by route and has **no fixed default** — an explicit
+user decision, not an oversight. Auto-resolving to GREEN would require
+guessing a crew size this tool has no way to know per-route. `citation.ts`
+gained a dedicated `easaProxyCitation()` helper (and
+`EASA_UK_CAA_PROXY_DOCUMENT`/`_URL`/`_DATE_CONSULTED` constants) rather than
+reusing `gcaaCitation` — reusing `gcaaCitation` would have falsely asserted
+the GCAA document as this data's source, which `RuleCitation`'s
+single-citation shape (`src/ftl/types.ts`) does not otherwise allow
+expressing as "this is a proxy from a different regulator." The mechanism to
+resolve either check to GREEN once a specific route's crew size is known was
+already correctly wired end-to-end before this change
+(`ulrFtlVariationMaxFdpMinutes`/`augmentedCrewRestFacilityMaxFdpMinutes` on
+`OperatorSpecificOverrides`) — no UI to set them per-route was in scope for
+this change, only keeping the message text honest and useful while they
+remain unset.
+
+## 16. "Today" highlighting on the calendar grid uses the UTC calendar day
+
+Phase 5 UI polish (this session) — `src/app/roster/[year]/[month]/page.tsx`
+computes today's date server-side and passes an `isToday: boolean` prop
+into `DayCard` for the matching cell, only when the requested
+`/roster/[year]/[month]` is the real current UTC year/month. This reuses the
+project's existing UTC-day convention rather than introducing a new one —
+see item 2 in `docs/pairing-assumptions.md` (`daysOfWeek` is evaluated
+against the UTC calendar date) and this file's own use of
+`T00:00:00.000Z` date parsing for the grid's Mon-start weekday padding.
+"Today" is therefore `new Date().getUTCFullYear()/getUTCMonth()/getUTCDate()`,
+not the server's local timezone — consistent with how every other date in
+this codebase (flight instances, roster entries, pairing legs) is treated
+as a UTC calendar day with no station-local component.
