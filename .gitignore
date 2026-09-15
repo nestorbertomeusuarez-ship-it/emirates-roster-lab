@@ -50,3 +50,6 @@ next-env.d.ts
 # ingest cache and usage tracking (gitignored per spec)
 src/ingest/cache/
 .aerodatabox-usage.json
+
+# CodeGraph local index (per-checkout, not source)
+/.codegraph/
