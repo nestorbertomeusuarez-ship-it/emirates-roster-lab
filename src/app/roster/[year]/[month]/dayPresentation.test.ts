@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { DatedRuleEvaluation, RosterGenDay } from '@/roster-gen/types';
 import type { GeneratedPairing } from '@/pairing/types';
 import type { RuleEvaluation } from '@/ftl/types';
-import { buildDayCategoryMap, buildWorstSeverityMap, classifyDayCategory } from './dayPresentation';
+import {
+  buildDayCategoryMap,
+  buildWorstSeverityMap,
+  classifyDayCategory,
+  resolveCalendarBadgeCategory,
+} from './dayPresentation';
 
 function makePairing(legDates: string[]): GeneratedPairing {
   return {
@@ -97,6 +102,37 @@ describe('buildDayCategoryMap', () => {
     expect(map.get('2026-10-05')).toBe('FLIGHT');
     expect(map.get('2026-10-06')).toBe('LAYOVER');
     expect(map.get('2026-10-07')).toBe('FLIGHT');
+  });
+});
+
+describe('resolveCalendarBadgeCategory', () => {
+  it('leaves FLIGHT and LAYOVER untouched regardless of dutyType', () => {
+    expect(resolveCalendarBadgeCategory('FLIGHT', 'FLIGHT')).toBe('FLIGHT');
+    expect(resolveCalendarBadgeCategory('LAYOVER', 'FLIGHT')).toBe('LAYOVER');
+  });
+
+  it('leaves DXB_OFF as-is when the real duty type is OFF', () => {
+    expect(resolveCalendarBadgeCategory('DXB_OFF', 'OFF')).toBe('DXB_OFF');
+  });
+
+  it('overrides a DXB_OFF category with the real duty type for STANDBY/SIM/GROUND_SCHOOL/VACATION', () => {
+    // classifyDayCategory collapses every non-FLIGHT RosterGenDay to
+    // {type:'OFF'} -> DXB_OFF per item 11's OFF-equivalent evaluation
+    // mapping — but the calendar badge should show the pilot's ACTUAL duty
+    // (standby/sim/ground school/vacation), not misrepresent it as a real
+    // day off at home base.
+    expect(resolveCalendarBadgeCategory('DXB_OFF', 'STANDBY')).toBe('STANDBY');
+    expect(resolveCalendarBadgeCategory('DXB_OFF', 'SIM')).toBe('SIM');
+    expect(resolveCalendarBadgeCategory('DXB_OFF', 'GROUND_SCHOOL')).toBe('GROUND_SCHOOL');
+    expect(resolveCalendarBadgeCategory('DXB_OFF', 'VACATION')).toBe('VACATION');
+  });
+
+  it('passes through a null category unchanged', () => {
+    expect(resolveCalendarBadgeCategory(null, 'STANDBY')).toBeNull();
+  });
+
+  it('passes through an undefined dutyType (no entry) unchanged', () => {
+    expect(resolveCalendarBadgeCategory('DXB_OFF', undefined)).toBe('DXB_OFF');
   });
 });
 

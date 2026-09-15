@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import type { RosterEntry } from '@prisma/client';
-import type { GeneratedPairing } from '@/pairing/types';
+import type { DutyType, GeneratedPairing } from '@/pairing/types';
 import { DUTY_TYPES } from '@/pairing/types';
 import type { Severity } from '@/ftl/types';
-import type { DayCategory } from './dayPresentation';
+import type { CalendarBadgeCategory, DayCategory } from './dayPresentation';
+import { resolveCalendarBadgeCategory } from './dayPresentation';
 import {
   assignPairingDutyAction,
   assignSimpleDutyAction,
@@ -44,7 +45,7 @@ interface DayCardProps {
   isToday: boolean;
 }
 
-const CATEGORY_BADGES: Record<DayCategory, { label: string; icon: string; className: string }> = {
+const CATEGORY_BADGES: Record<CalendarBadgeCategory, { label: string; icon: string; className: string }> = {
   FLIGHT: {
     label: 'Flight',
     icon: '✈',
@@ -59,6 +60,30 @@ const CATEGORY_BADGES: Record<DayCategory, { label: string; icon: string; classN
     label: 'Off · DXB',
     icon: '\u{1F3E0}',
     className: 'bg-slate-100 text-slate-900 dark:bg-slate-700 dark:text-slate-100',
+  },
+  // Real duty types that classifyDayCategory collapses to DXB_OFF for
+  // evaluation purposes (item 11) — resolveCalendarBadgeCategory widens
+  // them back out for the calendar badge so they don't misread as a real
+  // day off (see dayPresentation.ts's doc comment).
+  STANDBY: {
+    label: 'Standby',
+    icon: '\u{1F4DE}',
+    className: 'bg-orange-100 text-orange-900 dark:bg-orange-900 dark:text-orange-100',
+  },
+  SIM: {
+    label: 'Sim',
+    icon: '\u{1F5A5}',
+    className: 'bg-indigo-100 text-indigo-900 dark:bg-indigo-900 dark:text-indigo-100',
+  },
+  GROUND_SCHOOL: {
+    label: 'Ground school',
+    icon: '\u{1F4DA}',
+    className: 'bg-teal-100 text-teal-900 dark:bg-teal-900 dark:text-teal-100',
+  },
+  VACATION: {
+    label: 'Vacation',
+    icon: '\u{1F334}',
+    className: 'bg-lime-100 text-lime-900 dark:bg-lime-900 dark:text-lime-100',
   },
 };
 
@@ -116,7 +141,14 @@ export default function DayCard({
   // has nothing decided yet and stays as plain "unassigned" text below,
   // rather than presenting as a confirmed DXB day off (see
   // docs/roster-gen-assumptions.md item 12).
-  const categoryBadge = category && (entry || isPairingContinuation) ? CATEGORY_BADGES[category] : null;
+  const resolvedCategory =
+    category && (entry || isPairingContinuation)
+      ? // `RosterEntry.dutyType` is a Prisma `String` column (SQLite has no
+        // native enum support — see prisma/schema.prisma's documented
+        // deviation), constrained to `DutyType` at the application layer.
+        resolveCalendarBadgeCategory(category, entry?.dutyType as DutyType | undefined)
+      : null;
+  const categoryBadge = resolvedCategory ? CATEGORY_BADGES[resolvedCategory] : null;
 
   // Phase 5 Slice 4 — deep-link a FLIGHT-category day (an actual flying leg
   // operates this exact date, per dayPresentation.ts#classifyDayCategory)

@@ -16,6 +16,7 @@
  */
 
 import type { DatedRuleEvaluation, RosterGenDay } from '@/roster-gen/types';
+import type { DutyType } from '@/pairing/types';
 import type { Severity } from '@/ftl/types';
 import { groupEvaluationsByDate } from './complianceGrouping';
 
@@ -48,6 +49,39 @@ export function classifyDayCategory(day: RosterGenDay): DayCategory {
     (leg) => leg.instance.serviceDate === day.date
   );
   return hasLegToday ? 'FLIGHT' : 'LAYOVER';
+}
+
+/**
+ * Calendar badge category, widening `DayCategory` with the 4 non-FLIGHT/OFF
+ * `DutyType`s (STANDBY/SIM/GROUND_SCHOOL/VACATION) for DISPLAY purposes only.
+ */
+export type CalendarBadgeCategory = DayCategory | 'STANDBY' | 'SIM' | 'GROUND_SCHOOL' | 'VACATION';
+
+/**
+ * Resolves the badge a calendar day cell should actually show.
+ *
+ * `classifyDayCategory` derives its category from `RosterGenDay`, which —
+ * per item 11's OFF-equivalent evaluation mapping — has already collapsed
+ * every non-FLIGHT `RosterEntry.dutyType` (STANDBY/SIM/GROUND_SCHOOL/
+ * VACATION), and an unassigned day, down to `{type:'OFF'}`. That collapse
+ * is correct for GCAA evaluation purposes, but taken at face value for the
+ * calendar badge it would show "Off · DXB" for a pilot who is actually on
+ * standby, in the simulator, in ground school, or on vacation — misleading,
+ * since those are real distinct duty types, not a day off at home base.
+ *
+ * This widens the DXB_OFF case back out using the real `RosterEntry.dutyType`
+ * (already available wherever a day has an `entry`), without touching
+ * `classifyDayCategory`/`RosterGenDay`/the evaluator — this is presentation
+ * only, exactly like item 12's LAYOVER classification.
+ */
+export function resolveCalendarBadgeCategory(
+  category: DayCategory | null,
+  dutyType: DutyType | undefined
+): CalendarBadgeCategory | null {
+  if (category === 'DXB_OFF' && dutyType && dutyType !== 'OFF' && dutyType !== 'FLIGHT') {
+    return dutyType;
+  }
+  return category;
 }
 
 /** Builds a date ('YYYY-MM-DD') -> `DayCategory` lookup for a whole month's `RosterGenDay[]`. */

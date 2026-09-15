@@ -380,3 +380,28 @@ against the UTC calendar date) and this file's own use of
 not the server's local timezone — consistent with how every other date in
 this codebase (flight instances, roster entries, pairing legs) is treated
 as a UTC calendar day with no station-local component.
+
+## 17. Calendar badge widens STANDBY/SIM/GROUND_SCHOOL/VACATION back out from DXB_OFF — presentational only, found during this session's own review
+
+`classifyDayCategory` (item 12) derives its 3-way category from
+`RosterGenDay`, which — per item 11's OFF-equivalent evaluation mapping —
+has already collapsed every non-FLIGHT `RosterEntry.dutyType`
+(STANDBY/SIM/GROUND_SCHOOL/VACATION), and an unassigned day, down to
+`{type:'OFF'}`. Taken at face value for the calendar badge, that collapse
+would show "Off · DXB" for a pilot who is actually on standby, in the
+simulator, in ground school, or on vacation — a real, misleading gap
+between what the badge says and what the pilot is actually doing that day,
+found while auditing the calendar's own visual clarity (not reported by the
+user — self-identified and fixed per this session's standing instruction to
+keep hunting for issues and resolve them with due diligence).
+
+`src/app/roster/[year]/[month]/dayPresentation.ts#resolveCalendarBadgeCategory`
+widens a `DXB_OFF` category back out using the real `RosterEntry.dutyType`
+(already available wherever a day has an `entry` — `DayCard.tsx` already
+receives it as a prop) whenever that duty type isn't actually `OFF`. `FLIGHT`
+and `LAYOVER` categories are left untouched (they only ever occur when the
+real duty type is genuinely `FLIGHT`). This is presentation only, exactly
+like item 12's LAYOVER classification — it does NOT change
+`classifyDayCategory`, `RosterGenDay`, or `evaluateRosterDays` in any way;
+a STANDBY/SIM/GROUND_SCHOOL/VACATION day is still evaluated as OFF-equivalent
+per item 11, only the calendar badge's label changed.
