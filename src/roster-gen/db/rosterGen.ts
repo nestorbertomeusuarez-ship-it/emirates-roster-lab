@@ -12,6 +12,7 @@ import type { PrismaClient } from '@prisma/client';
 import { generatePairingsForMonth } from '../../pairing/db/pairings';
 import { assignPairingDuty, assignSimpleDuty } from '../../pairing/db/roster';
 import { getAirportTimeZones } from '../../lib/airportTimeZones';
+import { EMIRATES_OPERATOR_CONFIG } from '../../ftl/operatorConfig';
 import { generateMonthlyRoster } from '../generateMonthlyRoster';
 import type { MonthlyRosterGenerationResult } from '../types';
 
@@ -45,7 +46,16 @@ export async function buildMonthlyRosterForFleet(
 
   const airportTimeZones = await getAirportTimeZones(prisma);
 
-  return generateMonthlyRoster({ fleetType, year, month, pairings, airportTimeZones });
+  return generateMonthlyRoster({
+    fleetType,
+    year,
+    month,
+    pairings,
+    airportTimeZones,
+    // This app has exactly one user — see src/ftl/operatorConfig.ts for why
+    // a hardcoded constant (not a settings UI) is the correct wiring here.
+    operatorConfig: EMIRATES_OPERATOR_CONFIG,
+  });
 }
 
 /** Returns how many RosterEntry rows already exist for a month (used by the UI's confirm-before-overwrite step). */

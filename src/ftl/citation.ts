@@ -52,3 +52,38 @@ export function operatorSpecificCitation(
     dateConsulted: GCAA_DATE_CONSULTED,
   };
 }
+
+/**
+ * EASA CS-FTL.1.205(c) (the augmented-crew rest-facility -> max-FDP table),
+ * corroborated against the UK CAA's own hosted regulatory-library copy of
+ * the same text. Verified this session (see `docs/roster-gen-assumptions.md`
+ * for the full judgment-call log). Used, per explicit user instruction, as
+ * the closest available PUBLIC proxy for two GCAA `OPERATOR_SPECIFIC` gaps
+ * (`src/ftl/rules/operatorSpecific.ts`) — it is a DIFFERENT regulator's
+ * public text, never Emirates' actual confidential/approved scheme, so it
+ * must never be built with `gcaaCitation` (which asserts the GCAA document
+ * above as the source).
+ */
+export const EASA_UK_CAA_PROXY_DOCUMENT =
+  "EASA CS-FTL.1.205(c) (Certification Specifications and Guidance Material to Part-ORO — Subpart FTL), corroborated against the UK CAA Regulatory Library's hosted copy of the same clause. NOT a GCAA document, and NOT Emirates' actual approved scheme — used only as the closest public proxy, per explicit user instruction.";
+
+export const EASA_UK_CAA_PROXY_DOCUMENT_URL =
+  'https://regulatorylibrary.caa.co.uk/965-2012/Content/Document%20Structure/03%20ORO/5%20CS/CS%20FTL%201%20205%20Flight%20duty%20period.htm';
+
+export const EASA_UK_CAA_PROXY_DATE_CONSULTED = '2026-09-15';
+
+/**
+ * Builds a citation against the EASA/UK-CAA proxy source above, for use
+ * only where GCAA publishes no equivalent public data and a different
+ * regulator's public text is being used as an explicit stand-in (never for
+ * anything GCAA-sourced — use `gcaaCitation` for that).
+ */
+export function easaProxyCitation(ruleId: string, clause: string): RuleCitation {
+  return {
+    ruleId,
+    clause,
+    document: EASA_UK_CAA_PROXY_DOCUMENT,
+    documentUrl: EASA_UK_CAA_PROXY_DOCUMENT_URL,
+    dateConsulted: EASA_UK_CAA_PROXY_DATE_CONSULTED,
+  };
+}

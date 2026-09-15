@@ -131,10 +131,28 @@ export interface CumulativeTotals {
  * `src/ftl/rules/operatorSpecific.ts`. Values here are always user-entered,
  * never GCAA-sourced — every evaluation produced from them is clearly
  * labeled as such.
+ *
+ * `maxPairingsPerMonth` and `standbyContactablePeriodDefinition` each accept
+ * an explicit sentinel (`'none'` / `'not_used'`) in addition to a real
+ * configured value. This distinguishes three states that a plain optional
+ * field cannot: `undefined` = unknown/unconfigured (stays AMBER — nobody has
+ * said anything about this operator's scheme yet); a real number/string =
+ * an actual configured limit/definition (GREEN, still flagged
+ * `isOperatorSpecific`); the sentinel = the operator has explicitly
+ * confirmed there IS no cap / standby is not used at all (GREEN, worded as
+ * an operator confirmation rather than a configured limit). Without the
+ * sentinel, "no cap configured" and "confirmed no cap exists" would be
+ * indistinguishable from `undefined`, silently defaulting a real confirmed
+ * fact back to an unresolved AMBER. This type intentionally stays general
+ * (not narrowed to one operator) — see `src/ftl/operatorConfig.ts` for why
+ * this app's actual wiring is a single hardcoded config value rather than a
+ * multi-user settings type.
  */
 export interface OperatorSpecificOverrides {
   ulrFtlVariationMaxFdpMinutes?: number;
   augmentedCrewRestFacilityMaxFdpMinutes?: number;
-  maxPairingsPerMonth?: number;
-  standbyContactablePeriodDefinition?: string;
+  /** A real configured cap, or `'none'` for an explicit operator confirmation that no cap applies. */
+  maxPairingsPerMonth?: number | 'none';
+  /** A real configured definition, or `'not_used'` for an explicit operator confirmation that standby duty isn't part of this roster. */
+  standbyContactablePeriodDefinition?: string | 'not_used';
 }

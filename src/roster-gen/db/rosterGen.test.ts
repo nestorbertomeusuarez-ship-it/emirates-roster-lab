@@ -33,5 +33,25 @@ describe.each(['A350', 'A380'] as const)(
       const reds = result.evaluations.filter((e) => e.evaluation.severity === 'RED');
       expect(reds).toEqual([]);
     }, 60_000);
+
+    it('threads EMIRATES_OPERATOR_CONFIG through: pairing/standby resolves GREEN (operator confirmed), ULR/augmented-crew stay AMBER', async () => {
+      const result = await buildMonthlyRosterForFleet(prisma, YEAR, MONTH, fleetType);
+
+      const pairingStandby = result.evaluations.filter(
+        (e) => e.evaluation.citation.ruleId === 'operator-pairing-and-standby-limits'
+      );
+      expect(pairingStandby.length).toBeGreaterThan(0);
+      expect(pairingStandby.every((e) => e.evaluation.severity === 'GREEN')).toBe(true);
+      expect(pairingStandby.every((e) => /confirmed/i.test(e.evaluation.message))).toBe(true);
+
+      const ulr = result.evaluations.filter(
+        (e) => e.evaluation.citation.ruleId === 'operator-ulr-ftl-variation-scheme'
+      );
+      const augmentedCrew = result.evaluations.filter(
+        (e) => e.evaluation.citation.ruleId === 'operator-augmented-crew-rest-facility-table'
+      );
+      expect(ulr.every((e) => e.evaluation.severity === 'AMBER')).toBe(true);
+      expect(augmentedCrew.every((e) => e.evaluation.severity === 'AMBER')).toBe(true);
+    }, 60_000);
   }
 );

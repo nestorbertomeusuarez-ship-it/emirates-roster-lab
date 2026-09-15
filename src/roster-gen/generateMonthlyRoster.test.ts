@@ -164,6 +164,56 @@ describe('generateMonthlyRoster — synthetic fixture', () => {
   });
 });
 
+describe('generateMonthlyRoster — operatorConfig threading', () => {
+  const pairings = buildFixturePairings('A350');
+
+  it('defaults every operator-specific evaluation to AMBER when operatorConfig is omitted (unchanged prior behavior)', () => {
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+    });
+    const operatorSpecific = result.evaluations.filter((e) => e.evaluation.isOperatorSpecific);
+    expect(operatorSpecific.length).toBeGreaterThan(0);
+    expect(operatorSpecific.every((e) => e.evaluation.severity === 'AMBER')).toBe(true);
+  });
+
+  it('threads operatorConfig through both construction-time screening and the final verification pass', () => {
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+      operatorConfig: {
+        maxPairingsPerMonth: 'none',
+        standbyContactablePeriodDefinition: 'not_used',
+      },
+    });
+
+    const pairingStandbyEvaluations = result.evaluations.filter(
+      (e) => e.evaluation.citation.ruleId === 'operator-pairing-and-standby-limits'
+    );
+    expect(pairingStandbyEvaluations.length).toBeGreaterThan(0);
+    expect(pairingStandbyEvaluations.every((e) => e.evaluation.severity === 'GREEN')).toBe(true);
+    expect(pairingStandbyEvaluations.every((e) => /confirmed/i.test(e.evaluation.message))).toBe(
+      true
+    );
+
+    // ULR/augmented-crew stay AMBER — no crew-size default configured.
+    const ulrEvaluations = result.evaluations.filter(
+      (e) => e.evaluation.citation.ruleId === 'operator-ulr-ftl-variation-scheme'
+    );
+    expect(ulrEvaluations.every((e) => e.evaluation.severity === 'AMBER')).toBe(true);
+
+    // Threading operatorConfig must not change any non-operator-specific outcome.
+    const reds = result.evaluations.filter((e) => e.evaluation.severity === 'RED');
+    expect(reds).toEqual([]);
+  });
+});
+
 describe('generateMonthlyRoster — no candidates available', () => {
   it('assigns OFF to every day when the pairing pool is empty', () => {
     const result = generateMonthlyRoster({

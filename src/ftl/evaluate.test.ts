@@ -118,6 +118,28 @@ describe('evaluateDuty', () => {
     expect(operatorSpecific.filter((e) => e.severity === 'GREEN')).toHaveLength(3);
   });
 
+  it('resolves item 3 to GREEN via the confirmed-no-cap/standby-not-used sentinels, while items 1/2 stay AMBER when unconfigured', () => {
+    const evaluations = evaluateDuty(acclimatisedFdp, null, null, {
+      maxPairingsPerMonth: 'none',
+      standbyContactablePeriodDefinition: 'not_used',
+    });
+    const operatorSpecific = evaluations.filter((e) => e.isOperatorSpecific);
+    expect(operatorSpecific).toHaveLength(3);
+
+    const pairingStandby = operatorSpecific.find(
+      (e) => e.citation.ruleId === 'operator-pairing-and-standby-limits'
+    );
+    expect(pairingStandby!.severity).toBe('GREEN');
+    expect(pairingStandby!.message).toMatch(/confirmed/i);
+
+    const ulr = operatorSpecific.find((e) => e.citation.ruleId === 'operator-ulr-ftl-variation-scheme');
+    const augmentedCrew = operatorSpecific.find(
+      (e) => e.citation.ruleId === 'operator-augmented-crew-rest-facility-table'
+    );
+    expect(ulr!.severity).toBe('AMBER');
+    expect(augmentedCrew!.severity).toBe('AMBER');
+  });
+
   it('includes an in-flight-rest evaluation only when both rest fields are supplied on the FDP', () => {
     const withoutInFlightRest = evaluateDuty(acclimatisedFdp, null, null);
     expect(

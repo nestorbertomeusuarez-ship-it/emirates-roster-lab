@@ -27,6 +27,7 @@ import { getOrCreateRosterMonth } from '@/pairing/db/roster';
 import { loadRosterGenDaysForMonth } from '@/roster-gen/db/loadRosterGenDays';
 import { evaluateRosterDays } from '@/roster-gen/generateMonthlyRoster';
 import { getAirportTimeZones } from '@/lib/airportTimeZones';
+import { EMIRATES_OPERATOR_CONFIG } from '@/ftl/operatorConfig';
 import { buildWorstSeverityMap } from '../../dayPresentation';
 import CompliancePanel from '../../CompliancePanel';
 import { buildPairingTimelineRows } from './pairingTimelineData';
@@ -68,7 +69,13 @@ export default async function PairingDetailPage({ params }: PairingDetailPagePro
   const rosterMonth = await getOrCreateRosterMonth(prisma, year, month);
   const rosterGenDays = await loadRosterGenDaysForMonth(prisma, rosterMonth.id, year, month);
   const airportTimeZones = await getAirportTimeZones(prisma);
-  const monthEvaluations = evaluateRosterDays(rosterGenDays, airportTimeZones);
+  // This app has exactly one user — see src/ftl/operatorConfig.ts for why a
+  // hardcoded constant (not a settings UI) is the correct wiring here.
+  const monthEvaluations = evaluateRosterDays(
+    rosterGenDays,
+    airportTimeZones,
+    EMIRATES_OPERATOR_CONFIG
+  );
 
   // JUDGMENT CALL (docs/roster-gen-assumptions.md item 13): sliced to this
   // pairing's own date range from THIS month's evaluation window only — a

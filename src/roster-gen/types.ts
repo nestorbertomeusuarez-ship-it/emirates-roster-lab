@@ -11,7 +11,7 @@
  */
 
 import type { GeneratedPairing } from '../pairing/types';
-import type { RuleEvaluation } from '../ftl/types';
+import type { OperatorSpecificOverrides, RuleEvaluation } from '../ftl/types';
 
 /** One calendar day's automatically-generated assignment. */
 export type RosterGenDayAssignment =
@@ -52,6 +52,16 @@ export interface GenerateMonthlyRosterInput {
    * see docs/roster-gen-assumptions.md).
    */
   airportTimeZones: Record<string, string>;
+  /**
+   * Optional operator-configured overrides for the `OPERATOR_SPECIFIC`
+   * checks (`src/ftl/rules/operatorSpecific.ts`), threaded through to every
+   * `evaluateDuty()` call this generator makes (both construction-time
+   * candidate screening and the final verification pass — see
+   * `evaluateRosterDays`). `undefined` behaves exactly as before this field
+   * existed (every operator-specific check defaults to AMBER). See
+   * `src/ftl/operatorConfig.ts` for this app's actual single-user config.
+   */
+  operatorConfig?: OperatorSpecificOverrides;
 }
 
 export interface MonthlyRosterGenerationResult {

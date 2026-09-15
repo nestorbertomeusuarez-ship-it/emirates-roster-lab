@@ -56,7 +56,7 @@ import type { GeneratedPairing, PairingLegResult } from '../pairing/types';
 import { computeDutyMinutes, computeReportTime } from '../pairing/dutyTimes';
 import { toFlightDutyPeriod } from '../pairing/toFlightDutyPeriod';
 import { evaluateDuty } from '../ftl/evaluate';
-import type { CumulativeTotals, RestPeriodInput } from '../ftl/types';
+import type { CumulativeTotals, OperatorSpecificOverrides, RestPeriodInput } from '../ftl/types';
 import type {
   DatedRuleEvaluation,
   GenerateMonthlyRosterInput,
@@ -212,7 +212,8 @@ function buildDailyArrays(days: RosterGenDay[]): DailyArrays {
  */
 export function evaluateRosterDays(
   days: RosterGenDay[],
-  airportTimeZones: Record<string, string>
+  airportTimeZones: Record<string, string>,
+  operatorConfig?: OperatorSpecificOverrides
 ): DatedRuleEvaluation[] {
   const { dailyBlockMinutes, dailyDutyMinutes, isOff } = buildDailyArrays(days);
   const results: DatedRuleEvaluation[] = [];
@@ -270,7 +271,7 @@ export function evaluateRosterDays(
       avgDaysOffPer28dOver3Periods: trailingCount(isOff, i, 28),
     };
 
-    const dutyEvaluations = evaluateDuty(fdp, rest, cumulative).filter((evaluation) => {
+    const dutyEvaluations = evaluateDuty(fdp, rest, cumulative, operatorConfig).filter((evaluation) => {
       const ruleId = evaluation.citation.ruleId;
       if (ruleId === 'gcaa-days-off-2-in-14' && availableHistory14 < 14) return false;
       if (ruleId === 'gcaa-days-off-7-in-28' && availableHistory28 < 28) return false;
@@ -320,7 +321,7 @@ function countDistinctPairings(days: RosterGenDay[]): number {
 export function generateMonthlyRoster(
   input: GenerateMonthlyRosterInput
 ): MonthlyRosterGenerationResult {
-  const { fleetType, year, month, pairings, airportTimeZones } = input;
+  const { fleetType, year, month, pairings, airportTimeZones, operatorConfig } = input;
 
   const daysInMonth = daysInMonthOf(year, month);
   const dates = Array.from({ length: daysInMonth }, (_, i) => isoDate(year, month, i + 1));
@@ -363,7 +364,7 @@ export function generateMonthlyRoster(
         const candidateDays = buildCandidateDays(candidate, dates, dayIndex0);
         const hypothetical = [...days, ...candidateDays];
         const candidateDates = new Set(candidateDays.map((d) => d.date));
-        const evaluations = evaluateRosterDays(hypothetical, airportTimeZones);
+        const evaluations = evaluateRosterDays(hypothetical, airportTimeZones, operatorConfig);
         const hasRed = evaluations.some(
           (e) => candidateDates.has(e.date) && e.evaluation.severity === 'RED'
         );
@@ -384,7 +385,7 @@ export function generateMonthlyRoster(
     }
   }
 
-  const evaluations = evaluateRosterDays(days, airportTimeZones);
+  const evaluations = evaluateRosterDays(days, airportTimeZones, operatorConfig);
   const flightDays = days.filter((d) => d.assignment.type === 'FLIGHT').length;
 
   return {
