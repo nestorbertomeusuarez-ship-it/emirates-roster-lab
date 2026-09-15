@@ -152,14 +152,45 @@ Remaining for later phases (not done here, out of scope for Phase 3):
   translating a real pairing into it.
 - **The traffic-light compliance panel UI** — Phase 5, not yet started.
 
-## Phase 4 — Payroll & metrics
+## Phase 4 — Automatic monthly roster generator
 
-**Status: not started.**
+**Status: built (verified this session against the reconciled A350/A380
+seed network — see below).**
 
-- Configurable pay calculator: block-hour thresholds by month length,
-  flying pay vs. productivity pay tiers, call-out pay.
-- Monthly dashboard.
-- Roster comparator (this roster vs. an alternative/what-if roster).
+Built, under `src/roster-gen/`, zero dependency on `@prisma/client` for the
+pure algorithm module (mirrors `src/pairing/`'s and `src/ftl/`'s discipline
+— Prisma access is confined to `src/roster-gen/db/`):
+
+Given a fleet type and month, produces a full day-by-day FLIGHT/OFF
+assignment that is GCAA-compliant *by construction* — every candidate
+pairing is screened against the real Phase 3 `evaluateDuty()` before being
+accepted — plus an independent post-generation verification pass that
+re-runs `evaluateDuty()` against the finished result. Greedy day-by-day
+construction (not a global optimizer or CSP solver); full scope, every
+judgment call, and every documented limitation (no cross-month history,
+Table A acclimatisation assumed, deterministic-not-random ordering, etc.)
+are in `docs/roster-gen-assumptions.md`.
+
+Wired into the manual roster constructor UI
+(`src/app/roster/[year]/[month]/actions.ts#generateRosterAction`) with a
+confirm-before-overwrite step when the month already has entries.
+
+**Verified 2026-09-15** against the reconciled 54-route A350/A380 seed
+network (October 2026, the seed data's covered month): both fleets
+generated a full month with **zero RED evaluations**; every AMBER present
+was exactly the 3 documented `OPERATOR_SPECIFIC` placeholders (ULR FTL
+variation scheme, augmented-crew rest table, pairing/standby limits) —
+never a real compliance gap. A350: 24 flight days / 7 off days across 10
+pairings. A380: 23 flight days / 8 off days across 8 pairings. Confirms the
+generator still holds up after the seed data expansion that happened after
+it was built.
+
+### Payroll & metrics — dropped
+
+Originally scoped here (pay calculator, monthly dashboard, roster
+comparator). **Dropped per explicit user decision, 2026-09-15** — out of
+scope for this tool going forward. Not reflected anywhere else in the
+codebase (nothing was built against it), so no removal work is needed.
 
 ## Phase 5 — UI
 
