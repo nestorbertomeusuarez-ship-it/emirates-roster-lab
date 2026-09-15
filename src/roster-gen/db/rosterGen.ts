@@ -11,6 +11,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { generatePairingsForMonth } from '../../pairing/db/pairings';
 import { assignPairingDuty, assignSimpleDuty } from '../../pairing/db/roster';
+import { getAirportTimeZones } from '../../lib/airportTimeZones';
 import { generateMonthlyRoster } from '../generateMonthlyRoster';
 import type { MonthlyRosterGenerationResult } from '../types';
 
@@ -42,8 +43,7 @@ export async function buildMonthlyRosterForFleet(
     fleetTypes: [fleetType],
   });
 
-  const airports = await prisma.airport.findMany({ select: { iata: true, tz: true } });
-  const airportTimeZones = Object.fromEntries(airports.map((airport) => [airport.iata, airport.tz]));
+  const airportTimeZones = await getAirportTimeZones(prisma);
 
   return generateMonthlyRoster({ fleetType, year, month, pairings, airportTimeZones });
 }
