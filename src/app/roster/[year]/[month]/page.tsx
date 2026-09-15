@@ -12,6 +12,7 @@
  * the user can see every day of the month and assign a duty to it.
  */
 
+import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import {
   buildRosterGrid,
@@ -23,10 +24,12 @@ import type { GeneratedPairing } from '@/pairing/types';
 import { loadRosterGenDaysForMonth } from '@/roster-gen/db/loadRosterGenDays';
 import { evaluateRosterDays } from '@/roster-gen/generateMonthlyRoster';
 import { getAirportTimeZones } from '@/lib/airportTimeZones';
+import { EMIRATES_OPERATOR_CONFIG } from '@/ftl/operatorConfig';
 import DayCard from './DayCard';
 import CompliancePanel from './CompliancePanel';
 import { generateRosterAction } from './actions';
 import { buildDayCategoryMap, buildWorstSeverityMap } from './dayPresentation';
+import { nextMonth, previousMonth } from './adjacentMonth';
 
 const UI_PAIRING_CONSTRAINTS = {
   maxTripDays: 4,
@@ -95,7 +98,13 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
   // every render, independent of the one-time genSummary banner above.
   const rosterGenDays = await loadRosterGenDaysForMonth(prisma, rosterMonth.id, year, month);
   const airportTimeZones = await getAirportTimeZones(prisma);
-  const complianceEvaluations = evaluateRosterDays(rosterGenDays, airportTimeZones);
+  // This app has exactly one user — see src/ftl/operatorConfig.ts for why a
+  // hardcoded constant (not a settings UI) is the correct wiring here.
+  const complianceEvaluations = evaluateRosterDays(
+    rosterGenDays,
+    airportTimeZones,
+    EMIRATES_OPERATOR_CONFIG
+  );
 
   // Phase 5 Slice 3 — per-day category (FLIGHT/DXB_OFF/LAYOVER) and
   // worst-severity lookups for the calendar grid, built from the exact same
@@ -117,11 +126,42 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
   const firstDayIso = cells[0]?.date ?? `${year}-${String(month).padStart(2, '0')}-01`;
   const firstWeekdayIndex = (new Date(`${firstDayIso}T00:00:00.000Z`).getUTCDay() + 6) % 7; // Mon=0
 
+  // Prev/next month navigation — pure year/month arithmetic, see
+  // adjacentMonth.ts (unit-tested there for the year-rollover cases).
+  const prev = previousMonth({ year, month });
+  const next = nextMonth({ year, month });
+
+  // Today highlighting — see docs/roster-gen-assumptions.md item 16.
+  // Reuses this codebase's established UTC-day convention (see
+  // docs/pairing-assumptions.md item 2) rather than introducing a new one:
+  // "today" is today's UTC calendar date, and a day cell is only ever
+  // marked "today" when the requested /roster/[year]/[month] is the real
+  // current UTC year/month.
+  const nowUTC = new Date();
+  const todayIso = `${nowUTC.getUTCFullYear()}-${String(nowUTC.getUTCMonth() + 1).padStart(
+    2,
+    '0'
+  )}-${String(nowUTC.getUTCDate()).padStart(2, '0')}`;
+  const isCurrentMonth = nowUTC.getUTCFullYear() === year && nowUTC.getUTCMonth() + 1 === month;
+
   return (
     <main className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-xl font-semibold mb-1">
-        Roster — {year}-{String(month).padStart(2, '0')}
-      </h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+        <h1 className="text-xl font-semibold">
+          Roster — {year}-{String(month).padStart(2, '0')}
+        </h1>
+        <nav className="flex items-center gap-3 text-xs">
+          <Link href={`/roster/${prev.year}/${prev.month}`} className="underline">
+            ← Prev
+          </Link>
+          <Link href={`/roster/${next.year}/${next.month}`} className="underline">
+            Next →
+          </Link>
+          <Link href="/roster" className="underline text-zinc-400">
+            ← All months
+          </Link>
+        </nav>
+      </div>
       <p className="text-xs text-zinc-400 mb-6">
         {pairings.length} candidate pairing{pairings.length === 1 ? '' : 's'} generated
         for this month (max {UI_PAIRING_CONSTRAINTS.maxTripDays} trip days,{' '}
@@ -129,6 +169,49 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
         layover window, same-fleet-type-per-pairing assumption — see
         docs/pairing-assumptions.md).
       </p>
+
+      {/*
+        Responsive layout: below `md` there is no room for 7 fixed-width
+        columns (each holding a multi-row DayCard) — that renders but is
+        genuinely unusable at phone width, not just unpolished. Below `md`
+        the grid collapses to a single-column stacked "agenda" list (each
+        DayCard shows its own date/weekday inline, see DayCard.tsx), so the
+        weekday header row — which only makes sense as column labels — is
+        hidden entirely below `md`.
+      */}
+      <div className="hidden md:grid md:grid-cols-7 gap-2 mb-2">
+        {WEEKDAY_HEADERS.map((label) => (
+          <div key={label} className="text-xs font-medium text-zinc-500 text-center">
+            {label}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-7 gap-2 mb-6">
+        {Array.from({ length: firstWeekdayIndex }).map((_, i) => (
+          // Week-alignment padding only means anything in the 7-column
+          // desktop grid; the mobile agenda list has no columns to align.
+          <div key={`pad-${i}`} className="hidden md:block" />
+        ))}
+        {cells.map((cell) => (
+          <DayCard
+            key={cell.date}
+            rosterMonthId={rosterMonth.id}
+            year={year}
+            month={month}
+            date={cell.date}
+            entry={cell.entry}
+            isPairingContinuation={cell.isPairingContinuation}
+            dayOfPairing={cell.dayOfPairing}
+            candidates={candidatesByStartDate.get(cell.date) ?? []}
+            category={dayCategoryByDate.get(cell.date) ?? null}
+            severity={worstSeverityByDate.get(cell.date) ?? null}
+            isToday={isCurrentMonth && cell.date === todayIso}
+          />
+        ))}
+      </div>
+
+      <CompliancePanel evaluations={complianceEvaluations} />
 
       <section className="border rounded p-3 mb-6 text-xs">
         <h2 className="text-sm font-semibold mb-2">Automatic roster generation</h2>
@@ -194,37 +277,6 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
           </button>
         </form>
       </section>
-
-      <CompliancePanel evaluations={complianceEvaluations} />
-
-      <div className="grid grid-cols-7 gap-2 mb-2">
-        {WEEKDAY_HEADERS.map((label) => (
-          <div key={label} className="text-xs font-medium text-zinc-500 text-center">
-            {label}
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-7 gap-2">
-        {Array.from({ length: firstWeekdayIndex }).map((_, i) => (
-          <div key={`pad-${i}`} />
-        ))}
-        {cells.map((cell) => (
-          <DayCard
-            key={cell.date}
-            rosterMonthId={rosterMonth.id}
-            year={year}
-            month={month}
-            date={cell.date}
-            entry={cell.entry}
-            isPairingContinuation={cell.isPairingContinuation}
-            dayOfPairing={cell.dayOfPairing}
-            candidates={candidatesByStartDate.get(cell.date) ?? []}
-            category={dayCategoryByDate.get(cell.date) ?? null}
-            severity={worstSeverityByDate.get(cell.date) ?? null}
-          />
-        ))}
-      </div>
     </main>
   );
 }

@@ -31,6 +31,13 @@ interface DayCardProps {
    * (normal for LAYOVER/DXB_OFF days — see dayPresentation.ts).
    */
   severity: Severity | null;
+  /**
+   * Whether this cell is today's real-world date, pre-computed by the page
+   * (UTC-day convention, see docs/roster-gen-assumptions.md item 16) —
+   * kept out of this component so it stays a dumb presentational piece,
+   * matching every other prop here.
+   */
+  isToday: boolean;
 }
 
 const CATEGORY_BADGES: Record<DayCategory, { label: string; icon: string; className: string }> = {
@@ -56,6 +63,18 @@ const SEVERITY_BADGES: Record<Severity, string> = {
   AMBER: 'bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100',
   GREEN: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100',
 };
+
+// Mon-first, matching page.tsx's WEEKDAY_HEADERS order and its established
+// UTC-day convention (see page.tsx's `firstWeekdayIndex`/today-highlighting
+// comments and docs/pairing-assumptions.md item 2). Only rendered below
+// `md`, where the column header row (which normally carries this label) is
+// hidden — see page.tsx's responsive grid.
+const MOBILE_WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function weekdayLabelFor(date: string): string {
+  const utcDay = new Date(`${date}T00:00:00.000Z`).getUTCDay();
+  return MOBILE_WEEKDAY_LABELS[(utcDay + 6) % 7];
+}
 
 function summarizePairing(pairing: GeneratedPairing): string {
   const route = pairing.legs.map((leg) => leg.instance.depIata).concat(
@@ -85,6 +104,7 @@ export default function DayCard({
   candidates,
   category,
   severity,
+  isToday,
 }: DayCardProps) {
   const dayNumber = Number(date.slice(8, 10));
   // Only show the category chip when a day actually carries a real
@@ -107,9 +127,86 @@ export default function DayCard({
       ? `/roster/${year}/${month}/pairing/${entry.pairingId}`
       : null;
 
+  // Declutter (Phase 5 UI slice, 2026-09-15): the duty-type form, the
+  // pairing-reassignment form, and the "clear" link (the last only relevant
+  // once `entry` exists) used to render unconditionally for every
+  // non-continuation day. On an already-assigned day that's up to 3 extra
+  // stacked rows on top of the badges/entry label already shown, so this
+  // same JSX is now shown directly for an unassigned day (assigning IS the
+  // primary action there) but hidden behind a disclosure for an
+  // already-assigned day (reassignment is secondary) — see below.
+  const reassignmentForms = (
+    <>
+      <form action={assignSimpleDutyAction} className="flex gap-1">
+        <input type="hidden" name="rosterMonthId" value={rosterMonthId} />
+        <input type="hidden" name="date" value={date} />
+        <input type="hidden" name="year" value={year} />
+        <input type="hidden" name="month" value={month} />
+        <select name="dutyType" className="border rounded flex-1 min-w-0" defaultValue="OFF">
+          {DUTY_TYPES.filter((d) => d !== 'FLIGHT').map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+        <button type="submit" className="border rounded px-1">
+          Set
+        </button>
+      </form>
+
+      {candidates.length > 0 && (
+        <form action={assignPairingDutyAction} className="flex gap-1">
+          <input type="hidden" name="rosterMonthId" value={rosterMonthId} />
+          <input type="hidden" name="date" value={date} />
+          <input type="hidden" name="year" value={year} />
+          <input type="hidden" name="month" value={month} />
+          <select name="pairingIndex" className="border rounded flex-1 min-w-0">
+            {candidates.map((pairing, index) => (
+              <option key={index} value={index}>
+                {summarizePairing(pairing)}
+              </option>
+            ))}
+          </select>
+          <button type="submit" className="border rounded px-1">
+            Fly
+          </button>
+        </form>
+      )}
+
+      {entry && (
+        <form action={clearDutyAction}>
+          <input type="hidden" name="rosterMonthId" value={rosterMonthId} />
+          <input type="hidden" name="date" value={date} />
+          <input type="hidden" name="year" value={year} />
+          <input type="hidden" name="month" value={month} />
+          <button type="submit" className="text-zinc-400 underline">
+            clear
+          </button>
+        </form>
+      )}
+    </>
+  );
+
   return (
-    <div className="border rounded p-2 min-h-[9rem] flex flex-col gap-1 text-xs">
-      <div className="font-semibold text-sm">{dayNumber}</div>
+    <div
+      className={`border rounded p-3 md:p-2 md:min-h-[9rem] flex flex-col gap-1.5 md:gap-1 text-sm md:text-xs ${
+        isToday ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
+      }`}
+    >
+      <div className="font-semibold text-base md:text-sm flex items-center gap-1.5 md:gap-1">
+        {dayNumber}
+        <span className="md:hidden font-normal text-xs text-zinc-500 dark:text-zinc-400">
+          {weekdayLabelFor(date)}
+        </span>
+        {isToday && (
+          <span
+            className="rounded px-1 py-0.5 text-[10px] font-semibold bg-blue-100 text-blue-900 dark:bg-blue-900 dark:text-blue-100"
+            title="Today"
+          >
+            Today
+          </span>
+        )}
+      </div>
 
       {(categoryBadge || severity) && (
         <div className="flex flex-wrap gap-1">
@@ -169,57 +266,22 @@ export default function DayCard({
         <div className="text-zinc-400">unassigned</div>
       )}
 
-      {!isPairingContinuation && (
-        <>
-          <form action={assignSimpleDutyAction} className="flex gap-1">
-            <input type="hidden" name="rosterMonthId" value={rosterMonthId} />
-            <input type="hidden" name="date" value={date} />
-            <input type="hidden" name="year" value={year} />
-            <input type="hidden" name="month" value={month} />
-            <select name="dutyType" className="border rounded flex-1 min-w-0" defaultValue="OFF">
-              {DUTY_TYPES.filter((d) => d !== 'FLIGHT').map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-            <button type="submit" className="border rounded px-1">
-              Set
-            </button>
-          </form>
-
-          {candidates.length > 0 && (
-            <form action={assignPairingDutyAction} className="flex gap-1">
-              <input type="hidden" name="rosterMonthId" value={rosterMonthId} />
-              <input type="hidden" name="date" value={date} />
-              <input type="hidden" name="year" value={year} />
-              <input type="hidden" name="month" value={month} />
-              <select name="pairingIndex" className="border rounded flex-1 min-w-0">
-                {candidates.map((pairing, index) => (
-                  <option key={index} value={index}>
-                    {summarizePairing(pairing)}
-                  </option>
-                ))}
-              </select>
-              <button type="submit" className="border rounded px-1">
-                Fly
-              </button>
-            </form>
-          )}
-
-          {entry && (
-            <form action={clearDutyAction}>
-              <input type="hidden" name="rosterMonthId" value={rosterMonthId} />
-              <input type="hidden" name="date" value={date} />
-              <input type="hidden" name="year" value={year} />
-              <input type="hidden" name="month" value={month} />
-              <button type="submit" className="text-zinc-400 underline">
-                clear
-              </button>
-            </form>
-          )}
-        </>
-      )}
+      {!isPairingContinuation &&
+        (entry ? (
+          // `<details>` needs no client JS and keeps this component's
+          // established "no client-side state" scope (see this file's top
+          // comment) — a `'use client'` + `useState` toggle was considered
+          // and rejected as a bigger architectural change than this slice
+          // calls for, since the native element already does the job.
+          <details className="mt-0.5">
+            <summary className="cursor-pointer select-none text-zinc-500 dark:text-zinc-400 underline text-xs md:text-[10px]">
+              change
+            </summary>
+            <div className="flex flex-col gap-1.5 md:gap-1 mt-1">{reassignmentForms}</div>
+          </details>
+        ) : (
+          <div className="flex flex-col gap-1.5 md:gap-1">{reassignmentForms}</div>
+        ))}
     </div>
   );
 }
