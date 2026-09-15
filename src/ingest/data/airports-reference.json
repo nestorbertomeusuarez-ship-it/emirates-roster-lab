@@ -446,5 +446,141 @@
     "lat": 30.1219,
     "lon": 31.4056,
     "tz": "Africa/Cairo"
+  },
+  {
+    "iata": "AMS",
+    "icao": "EHAM",
+    "name": "Amsterdam Airport Schiphol",
+    "lat": 52.3086,
+    "lon": 4.7639,
+    "tz": "Europe/Amsterdam"
+  },
+  {
+    "iata": "BCN",
+    "icao": "LEBL",
+    "name": "Barcelona-El Prat Airport",
+    "lat": 41.2971,
+    "lon": 2.0785,
+    "tz": "Europe/Madrid"
+  },
+  {
+    "iata": "BHX",
+    "icao": "EGBB",
+    "name": "Birmingham Airport",
+    "lat": 52.4539,
+    "lon": -1.748,
+    "tz": "Europe/London"
+  },
+  {
+    "iata": "DUS",
+    "icao": "EDDL",
+    "name": "Dusseldorf Airport",
+    "lat": 51.2895,
+    "lon": 6.7668,
+    "tz": "Europe/Berlin"
+  },
+  {
+    "iata": "MAD",
+    "icao": "LEMD",
+    "name": "Adolfo Suarez Madrid-Barajas Airport",
+    "lat": 40.4936,
+    "lon": -3.5668,
+    "tz": "Europe/Madrid"
+  },
+  {
+    "iata": "SVO",
+    "icao": "UUEE",
+    "name": "Sheremetyevo International Airport",
+    "lat": 55.9736,
+    "lon": 37.4125,
+    "tz": "Europe/Moscow"
+  },
+  {
+    "iata": "NCE",
+    "icao": "LFMN",
+    "name": "Nice Cote d'Azur Airport",
+    "lat": 43.6584,
+    "lon": 7.2159,
+    "tz": "Europe/Paris"
+  },
+  {
+    "iata": "VIE",
+    "icao": "LOWW",
+    "name": "Vienna International Airport",
+    "lat": 48.1103,
+    "lon": 16.5697,
+    "tz": "Europe/Vienna"
+  },
+  {
+    "iata": "ZRH",
+    "icao": "LSZH",
+    "name": "Zurich Airport",
+    "lat": 47.4647,
+    "lon": 8.5492,
+    "tz": "Europe/Zurich"
+  },
+  {
+    "iata": "DPS",
+    "icao": "WADD",
+    "name": "Ngurah Rai (Bali) International Airport",
+    "lat": -8.7482,
+    "lon": 115.1672,
+    "tz": "Asia/Makassar"
+  },
+  {
+    "iata": "BLR",
+    "icao": "VOBL",
+    "name": "Kempegowda International Airport Bengaluru",
+    "lat": 13.1986,
+    "lon": 77.7066,
+    "tz": "Asia/Kolkata"
+  },
+  {
+    "iata": "CHC",
+    "icao": "NZCH",
+    "name": "Christchurch International Airport",
+    "lat": -43.4894,
+    "lon": 172.532,
+    "tz": "Pacific/Auckland"
+  },
+  {
+    "iata": "ICN",
+    "icao": "RKSI",
+    "name": "Incheon International Airport",
+    "lat": 37.4602,
+    "lon": 126.4407,
+    "tz": "Asia/Seoul"
+  },
+  {
+    "iata": "PVG",
+    "icao": "ZSPD",
+    "name": "Shanghai Pudong International Airport",
+    "lat": 31.1443,
+    "lon": 121.8083,
+    "tz": "Asia/Shanghai"
+  },
+  {
+    "iata": "NRT",
+    "icao": "RJAA",
+    "name": "Narita International Airport",
+    "lat": 35.772,
+    "lon": 140.3929,
+    "tz": "Asia/Tokyo"
+  },
+  {
+    "iata": "CMN",
+    "icao": "GMMN",
+    "name": "Mohammed V International Airport",
+    "lat": 33.3675,
+    "lon": -7.59,
+    "tz": "Africa/Casablanca"
+  },
+  {
+    "iata": "MRU",
+    "icao": "FIMP",
+    "name": "Sir Seewoosagur Ramgoolam International Airport",
+    "lat": -20.4302,
+    "lon": 57.6836,
+    "tz": "Indian/Mauritius"
   }
 ]

@@ -1,17 +1,20 @@
 // One-off generator for the expanded DXB seed schedule (Part A of the
-// roster-lab extension task). NOT part of the app; run once via
-// `node scripts/gen-seed-data.mjs` to (re)write:
+// roster-lab extension task, plus the 2026-09-15 A380 correction/expansion
+// pass). NOT part of the app; run once via `node scripts/gen-seed-data.mjs`
+// to (re)write:
 //   - prisma/seed-data/dxb-seed-schedule.json
 //   - src/ingest/data/airports-reference.json (new airports appended)
 //
-// Rationale for generating rather than hand-typing ~110 flight records:
+// Rationale for generating rather than hand-typing the flight records:
 // stdUTCMin/staUTCMin/arrivalDayOffset must be internally consistent with
 // each route's real-world block time (blockTimeMin is derived from them by
 // computeBlockTimeMin, not stored directly), and hand-computing that for
-// ~55 routes x 2 directions is exactly the kind of arithmetic that silently
-// drifts. This script is the single place block-time -> UTC-minute-of-day
-// arithmetic happens; the *route data itself* (block times, confidence,
-// notes) is the human/research-sourced content described in the task.
+// dozens of routes x 2 directions is exactly the kind of arithmetic that
+// silently drifts. This script is the single place block-time -> UTC-
+// minute-of-day arithmetic happens; the *route data itself* (block times,
+// confidence, notes) is the human/research-sourced content described in the
+// task. See docs/data-sources.md for the 2026-09-15 A380 reconciliation
+// notes (BNE/KIX/GLA/MXP resolutions).
 
 import { writeFileSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -61,6 +64,29 @@ const NEW_AIRPORTS = [
   { iata: 'GLA', icao: 'EGPF', name: 'Glasgow Airport', lat: 55.8719, lon: -4.4331, tz: 'Europe/London' },
   { iata: 'PRG', icao: 'LKPR', name: 'Vaclav Havel Airport Prague', lat: 50.1008, lon: 14.2600, tz: 'Europe/Prague' },
   { iata: 'CAI', icao: 'HECA', name: 'Cairo International Airport', lat: 30.1219, lon: 31.4056, tz: 'Africa/Cairo' },
+
+  // --- Added for the 2026-09-15 user-supplied authoritative A380 destination
+  // list (30-region correction/expansion pass). FRA, MAN and CDG are already
+  // present above from an earlier pass and are deliberately NOT re-added
+  // here (the merge below dedupes by IATA anyway, so this is belt-and-braces
+  // documentation, not a functional requirement).
+  { iata: 'AMS', icao: 'EHAM', name: 'Amsterdam Airport Schiphol', lat: 52.3086, lon: 4.7639, tz: 'Europe/Amsterdam' },
+  { iata: 'BCN', icao: 'LEBL', name: 'Barcelona-El Prat Airport', lat: 41.2971, lon: 2.0785, tz: 'Europe/Madrid' },
+  { iata: 'BHX', icao: 'EGBB', name: 'Birmingham Airport', lat: 52.4539, lon: -1.7480, tz: 'Europe/London' },
+  { iata: 'DUS', icao: 'EDDL', name: 'Dusseldorf Airport', lat: 51.2895, lon: 6.7668, tz: 'Europe/Berlin' },
+  { iata: 'MAD', icao: 'LEMD', name: 'Adolfo Suarez Madrid-Barajas Airport', lat: 40.4936, lon: -3.5668, tz: 'Europe/Madrid' },
+  { iata: 'SVO', icao: 'UUEE', name: 'Sheremetyevo International Airport', lat: 55.9736, lon: 37.4125, tz: 'Europe/Moscow' },
+  { iata: 'NCE', icao: 'LFMN', name: 'Nice Cote d\'Azur Airport', lat: 43.6584, lon: 7.2159, tz: 'Europe/Paris' },
+  { iata: 'VIE', icao: 'LOWW', name: 'Vienna International Airport', lat: 48.1103, lon: 16.5697, tz: 'Europe/Vienna' },
+  { iata: 'ZRH', icao: 'LSZH', name: 'Zurich Airport', lat: 47.4647, lon: 8.5492, tz: 'Europe/Zurich' },
+  { iata: 'DPS', icao: 'WADD', name: 'Ngurah Rai (Bali) International Airport', lat: -8.7482, lon: 115.1672, tz: 'Asia/Makassar' },
+  { iata: 'BLR', icao: 'VOBL', name: 'Kempegowda International Airport Bengaluru', lat: 13.1986, lon: 77.7066, tz: 'Asia/Kolkata' },
+  { iata: 'CHC', icao: 'NZCH', name: 'Christchurch International Airport', lat: -43.4894, lon: 172.5320, tz: 'Pacific/Auckland' },
+  { iata: 'ICN', icao: 'RKSI', name: 'Incheon International Airport', lat: 37.4602, lon: 126.4407, tz: 'Asia/Seoul' },
+  { iata: 'PVG', icao: 'ZSPD', name: 'Shanghai Pudong International Airport', lat: 31.1443, lon: 121.8083, tz: 'Asia/Shanghai' },
+  { iata: 'NRT', icao: 'RJAA', name: 'Narita International Airport', lat: 35.7720, lon: 140.3929, tz: 'Asia/Tokyo' },
+  { iata: 'CMN', icao: 'GMMN', name: 'Mohammed V International Airport', lat: 33.3675, lon: -7.5900, tz: 'Africa/Casablanca' },
+  { iata: 'MRU', icao: 'FIMP', name: 'Sir Seewoosagur Ramgoolam International Airport', lat: -20.4302, lon: 57.6836, tz: 'Indian/Mauritius' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -75,11 +101,11 @@ const NEW_AIRPORTS = [
 const A350_ROUTES = [
   { iata: 'BAH', blockOut: 60, conf: 'ADVERTISED', note: 'user-supplied high-frequency route (multiple daily departures in reality e.g. ~3x/day); modeled here as one representative daily line' },
   { iata: 'KWI', blockOut: 90, conf: 'ADVERTISED' },
-  { iata: 'JED', blockOut: 140, conf: 'ADVERTISED', note: 'block time is a reasonable estimate, not a sourced fact' },
+  { iata: 'JED', blockOut: 140, conf: 'ADVERTISED', note: 'block time is a reasonable estimate, not a sourced fact; now a confirmed multi-type route — see the new CONFIRMED A380 JED row below, added per the user-supplied 2026-09-15 authoritative A380 destination list' },
   { iata: 'RUH', blockOut: 140, conf: 'ADVERTISED', note: 'block time is a reasonable estimate, not a sourced fact' },
   { iata: 'DMM', blockOut: 85, conf: 'ADVERTISED' },
   { iata: 'MCT', blockOut: 75, conf: 'ADVERTISED' },
-  { iata: 'AMM', blockOut: 205, conf: 'ADVERTISED', note: 'known multi-type route — A350/777/A380 all reported operating different AMM frequencies through 2026, do not treat as pure A350' },
+  { iata: 'AMM', blockOut: 205, conf: 'ADVERTISED', note: 'known multi-type route — A350/777/A380 all reported operating different AMM frequencies through 2026, do not treat as pure A350; corroborated by the user-supplied 2026-09-15 authoritative A380 destination list, which lists Amman as an active A380 destination — see the new CONFIRMED A380 AMM row below' },
   { iata: 'BGW', blockOut: 115, conf: 'CONFIRMED', note: 'history: mixed A350/other fleet through 2025, research found this route resolved to all-A350 from 1 Jan 2026 — current confidence reflects the post-2026-01-01 state' },
   { iata: 'EDI', blockOut: 435, conf: 'CONFIRMED', note: 'launch route — exact published times found' },
   { iata: 'LYS', blockOut: 405, conf: 'ADVERTISED' },
@@ -93,43 +119,89 @@ const A350_ROUTES = [
   { iata: 'CGK', blockOut: 510, conf: 'ADVERTISED', note: 'block time is a reasonable estimate, not a sourced fact' },
   { iata: 'ADL', blockOut: 705, conf: 'CONFIRMED', note: 'daily from Dec 2025' },
   { iata: 'SGN', blockOut: 255, conf: 'CONFIRMED', note: 'launched Aug 2025' },
-  { iata: 'BNE', blockOut: 840, conf: 'ADVERTISED', note: 'CONFLICT: user-supplied list places this under A350; independent research this session found BNE listed as a "Medium confidence" A380 route with no A350 corroboration found — needs user verification. Block time is an estimate.' },
+  { iata: 'BNE', blockOut: 840, conf: 'UNKNOWN', note: 'CONFLICT — LIKELY RESOLVED IN FAVOR OF A380, 2026-09-15: original independent research found BNE listed as a "Medium confidence" A380 route with no A350 corroboration; the user\'s later 2026-09-15 authoritative A380 destination list explicitly confirms Brisbane as an A380 destination and does NOT include it as A350. Confidence lowered from ADVERTISED to UNKNOWN pending correction — this row is kept for history, not as the currently best-supported claim. See the new CONFIRMED A380 BNE row below, which supersedes this one. Block time is an estimate.' },
   { iata: 'KIX', blockOut: 590, conf: 'ADVERTISED', note: 'CONFLICT: user-supplied list places this under A350; independent research this session found KIX historically operated as A380, with an uncertain current state after a temporary May-2026 swap to 777 — needs user verification. Same airport as the A380 KIX row below; both rows are intentionally kept.' },
   { iata: 'AMD', blockOut: 165, conf: 'ADVERTISED' },
   { iata: 'YUL', blockOut: 730, conf: 'CONFIRMED', note: 'daily from 11 Jan 2026' },
-  { iata: 'LGW', blockOut: 440, conf: 'CONFIRMED', note: 'from 8 Feb 2026' },
-  { iata: 'FCO', blockOut: 365, conf: 'CONFIRMED', note: 'from 29 Mar 2026' },
-  { iata: 'TPE', blockOut: 530, conf: 'CONFIRMED', note: 'from 1 May 2026' },
+  { iata: 'LGW', blockOut: 440, conf: 'CONFIRMED', note: 'from 8 Feb 2026; now a confirmed multi-type route — see the new CONFIRMED A380 LGW row below, added per the user-supplied 2026-09-15 authoritative A380 destination list' },
+  { iata: 'FCO', blockOut: 365, conf: 'CONFIRMED', note: 'from 29 Mar 2026; now a confirmed multi-type route — see the new CONFIRMED A380 FCO row below, added per the user-supplied 2026-09-15 authoritative A380 destination list' },
+  { iata: 'TPE', blockOut: 530, conf: 'CONFIRMED', note: 'from 1 May 2026; now a confirmed multi-type route — see the new CONFIRMED A380 TPE row below, added per the user-supplied 2026-09-15 authoritative A380 destination list' },
   { iata: 'HKT', blockOut: 345, conf: 'CONFIRMED', note: '3rd-daily from 1 Jul 2026; modeled here as one representative daily line, not 3 separate frequencies' },
   { iata: 'CPT', blockOut: 590, conf: 'ADVERTISED', note: 'multi-type route — A350/777/A380 all serve CPT on different frequencies' },
-  { iata: 'KUL', blockOut: 440, conf: 'ADVERTISED', note: 'multi-type route — same pattern as CPT/AMM' },
+  { iata: 'KUL', blockOut: 440, conf: 'ADVERTISED', note: 'multi-type route — same pattern as CPT/AMM; corroborated by the user-supplied 2026-09-15 authoritative A380 destination list — see the new CONFIRMED A380 KUL row below' },
   { iata: 'CPH', blockOut: 395, conf: 'ADVERTISED', note: 'VOLATILITY: CPH is actively transitioning from A380 to A350/777 through late 2026 — treat current type as genuinely uncertain, re-verify before relying on this. See the A380 CPH row below, kept simultaneously to model the transition.' },
 ];
 
+// CONFIRM_2026_09_15: shorthand appended below to the sourceRef of every
+// A380 route that the user's 2026-09-15 authoritative A380 destination list
+// reaffirms or newly establishes.
+const CONFIRM_2026_09_15 = 'user-supplied 2026-09-15 (authoritative A380 destination list)';
+
 const A380_ROUTES = [
-  { iata: 'LHR', blockOut: 435, blockRet: 465, conf: 'ADVERTISED' },
-  { iata: 'JFK', blockOut: 830, blockRet: 890, conf: 'ADVERTISED' },
-  { iata: 'LAX', blockOut: 970, conf: 'ADVERTISED' },
-  { iata: 'SFO', blockOut: 950, conf: 'ADVERTISED' },
-  { iata: 'IAH', blockOut: 875, conf: 'ADVERTISED' },
-  { iata: 'IAD', blockOut: 815, conf: 'ADVERTISED' },
-  { iata: 'YYZ', blockOut: 800, conf: 'ADVERTISED' },
-  { iata: 'GRU', blockOut: 920, conf: 'ADVERTISED' },
-  { iata: 'SYD', blockOut: 835, blockRet: 875, conf: 'ADVERTISED' },
-  { iata: 'AKL', blockOut: 1035, conf: 'ADVERTISED', note: "world's longest A380 route; daily from June 2026" },
-  { iata: 'MEL', blockOut: 815, conf: 'ADVERTISED' },
-  { iata: 'PER', blockOut: 660, conf: 'ADVERTISED' },
-  { iata: 'BOM', blockOut: 195, conf: 'ADVERTISED', note: 'multi-type route — also in the A350 list above; that is expected/correct, real airlines run multiple types on a high-frequency route', numOffset: 1 },
-  { iata: 'SIN', blockOut: 435, blockRet: 465, conf: 'ADVERTISED' },
-  { iata: 'BKK', blockOut: 395, conf: 'ADVERTISED' },
-  { iata: 'HKG', blockOut: 450, conf: 'ADVERTISED' },
-  { iata: 'JNB', blockOut: 495, conf: 'ADVERTISED' },
-  { iata: 'CAI', blockOut: 200, conf: 'ADVERTISED' },
-  { iata: 'CPH', blockOut: 395, conf: 'ADVERTISED', note: 'VOLATILITY: same route as the A350 CPH row above, kept simultaneously — CPH is still transitioning from A380 to A350/777 through late 2026, do not treat as settled', numOffset: 1 },
-  { iata: 'MXP', blockOut: 365, conf: 'ADVERTISED', note: 'frequency reportedly halved May 2026 amid regional disruption, current capacity uncertain' },
-  { iata: 'GLA', blockOut: 425, conf: 'ADVERTISED', note: 'reported swapped to 777-300ER in May 2026 amid regional disruption, unclear if reverted by research date' },
-  { iata: 'KIX', blockOut: 590, conf: 'ADVERTISED', note: 'CONFLICT/VOLATILITY: same airport as the conflicted A350 KIX row above; both rows kept intentionally. Reported swapped to 777-300ER in May 2026 amid regional disruption, unclear if reverted by research date', numOffset: 1 },
-  { iata: 'PRG', blockOut: 375, conf: 'ADVERTISED', note: 'reported swapped to 777-300ER in May 2026 amid regional disruption, unclear if reverted by research date' },
+  // --- Reconfirmed by the 2026-09-15 list: upgraded ADVERTISED -> CONFIRMED ---
+  { iata: 'LHR', blockOut: 435, blockRet: 465, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
+  { iata: 'JFK', blockOut: 830, blockRet: 890, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
+  { iata: 'LAX', blockOut: 970, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
+  { iata: 'SFO', blockOut: 950, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
+  { iata: 'IAH', blockOut: 875, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
+  { iata: 'IAD', blockOut: 815, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
+  { iata: 'YYZ', blockOut: 800, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
+  { iata: 'GRU', blockOut: 920, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
+  { iata: 'SYD', blockOut: 835, blockRet: 875, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
+  { iata: 'AKL', blockOut: 1035, conf: 'CONFIRMED', note: `world's longest A380 route; daily from June 2026; reconfirmed by ${CONFIRM_2026_09_15}` },
+  { iata: 'MEL', blockOut: 815, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
+  { iata: 'PER', blockOut: 660, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
+  { iata: 'BOM', blockOut: 195, conf: 'CONFIRMED', note: `multi-type route — also in the A350 list above; that is expected/correct, real airlines run multiple types on a high-frequency route; reconfirmed by ${CONFIRM_2026_09_15}`, numOffset: 1 },
+  { iata: 'SIN', blockOut: 435, blockRet: 465, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
+  { iata: 'BKK', blockOut: 395, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
+  { iata: 'HKG', blockOut: 450, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
+  { iata: 'JNB', blockOut: 495, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
+  { iata: 'CAI', blockOut: 200, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
+
+  // --- Not in the 2026-09-15 list: left untouched, still volatile/unconfirmed ---
+  { iata: 'CPH', blockOut: 395, conf: 'ADVERTISED', note: 'VOLATILITY: same route as the A350 CPH row above, kept simultaneously — CPH is still transitioning from A380 to A350/777 through late 2026, do not treat as settled. Not present on the 2026-09-15 A380 destination list, so left unconfirmed.', numOffset: 1 },
+  { iata: 'PRG', blockOut: 375, conf: 'ADVERTISED', note: 'reported swapped to 777-300ER in May 2026 amid regional disruption, unclear if reverted by research date. Not present on the 2026-09-15 A380 destination list, so left unconfirmed.' },
+
+  // --- Special reconciliations: resolved/upgraded per the task's explicit judgment calls ---
+  { iata: 'MXP', blockOut: 365, conf: 'CONFIRMED', note: `frequency reportedly halved May 2026 amid regional disruption; the ${CONFIRM_2026_09_15} reconfirms Milan (Malpensa) as an active A380 destination, superseding the May-2026 capacity-uncertainty note with more current information` },
+  { iata: 'GLA', blockOut: 425, conf: 'CONFIRMED', note: `reported swapped to 777-300ER in May 2026 amid regional disruption; the ${CONFIRM_2026_09_15} reconfirms Glasgow as an active A380 destination, resolving the May-2026 uncertainty in favor of reverted-to/still-A380` },
+  { iata: 'KIX', blockOut: 590, conf: 'CONFIRMED', note: `VOLATILITY RESOLVED: same airport as the A350 KIX row above (that row's A350/A380 CONFLICT note is left intact, not touched — do not delete history). Reported swapped to 777-300ER in May 2026 amid regional disruption; the ${CONFIRM_2026_09_15} reconfirms KIX as A380, which outweighs the May-2026 research snapshot`, numOffset: 1 },
+
+  // --- New multi-type rows: airport already has an A350 route above, now
+  // also confirmed as A380 by the 2026-09-15 list (same pattern as the
+  // pre-existing BOM/CPH dual rows) ---
+  { iata: 'TPE', blockOut: 530, conf: 'CONFIRMED', note: `multi-type route — also served by A350 (see A350 TPE row, launched 1 May 2026); a route can carry both an A350 and an A380 frequency, same pattern as BOM. Added per the ${CONFIRM_2026_09_15}`, sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'AMM', blockOut: 205, conf: 'CONFIRMED', note: `multi-type route — A350/777/A380 all reported operating different AMM frequencies through 2026 (see A350 AMM row above). Added per the ${CONFIRM_2026_09_15}`, sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'JED', blockOut: 140, conf: 'CONFIRMED', note: `multi-type route — also served by A350 (see A350 JED row above), same multi-type pattern as BOM/TPE. Added per the ${CONFIRM_2026_09_15}`, sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'LGW', blockOut: 440, conf: 'CONFIRMED', note: `multi-type route — also served by A350 (see A350 LGW row above, CONFIRMED from 8 Feb 2026). Added per the ${CONFIRM_2026_09_15}`, sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'FCO', blockOut: 365, conf: 'CONFIRMED', note: `multi-type route — also served by A350 (see A350 FCO row above, CONFIRMED from 29 Mar 2026). Added per the ${CONFIRM_2026_09_15}`, sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'KUL', blockOut: 440, conf: 'CONFIRMED', note: `multi-type route — also served by A350 (see A350 KUL row above, "same pattern as CPT/AMM"). Added per the ${CONFIRM_2026_09_15}`, sourceBase: CONFIRM_2026_09_15 },
+
+  // --- BNE conflict resolution: 2026-09-15 list confirms A380, not A350 ---
+  { iata: 'BNE', blockOut: 840, conf: 'CONFIRMED', note: `resolves the earlier A350/A380 conflict on this route (see the now-downgraded A350 BNE row above) in favor of A380, per the ${CONFIRM_2026_09_15}`, sourceBase: CONFIRM_2026_09_15 },
+
+  // --- Brand-new A380 routes/airports from the 2026-09-15 list, no prior
+  // seed entry of any type existed for these ---
+  { iata: 'AMS', blockOut: 405, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'BCN', blockOut: 395, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'BHX', blockOut: 430, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'DUS', blockOut: 380, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'FRA', blockOut: 380, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'MAD', blockOut: 410, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'MAN', blockOut: 435, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'SVO', blockOut: 305, conf: 'CONFIRMED', note: 'Sheremetyevo — Emirates\' typical Moscow gateway', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'NCE', blockOut: 395, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'CDG', blockOut: 410, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'VIE', blockOut: 345, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'ZRH', blockOut: 370, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'DPS', blockOut: 500, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'BLR', blockOut: 210, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'CHC', blockOut: 930, conf: 'CONFIRMED', note: 'modeled as one representative direct daily line per this generator\'s existing convention (see the file-header judgment-call note); in reality Emirates routes CHC via SYD/AKL rather than nonstop from DXB', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'ICN', blockOut: 570, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'PVG', blockOut: 520, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'NRT', blockOut: 575, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'CMN', blockOut: 475, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'MRU', blockOut: 325, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -196,7 +268,7 @@ for (const route of A380_ROUTES) {
   const num = a380Num + (route.numOffset ?? 0) * 0; // numOffset unused for value, kept for clarity of intent
   const flightNum = a380Num;
   a380Num += 2;
-  const baseRef = 'research corroboration 2026-09-14';
+  const baseRef = route.sourceBase ?? 'research corroboration 2026-09-14';
   const sourceRef = route.note ? `${baseRef} (${route.note})` : baseRef;
 
   const stdOut = stdForRoute(route.iata, 480);

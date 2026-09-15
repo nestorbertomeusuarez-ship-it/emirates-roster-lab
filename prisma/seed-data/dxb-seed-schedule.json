@@ -67,7 +67,7 @@
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "user-supplied 2026-09-14 + research corroboration (block time is a reasonable estimate, not a sourced fact)"
+    "sourceRef": "user-supplied 2026-09-14 + research corroboration (block time is a reasonable estimate, not a sourced fact; now a confirmed multi-type route — see the new CONFIRMED A380 JED row below, added per the user-supplied 2026-09-15 authoritative A380 destination list)"
   },
   {
     "number": "EK806",
@@ -81,7 +81,7 @@
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "user-supplied 2026-09-14 + research corroboration (block time is a reasonable estimate, not a sourced fact)"
+    "sourceRef": "user-supplied 2026-09-14 + research corroboration (block time is a reasonable estimate, not a sourced fact; now a confirmed multi-type route — see the new CONFIRMED A380 JED row below, added per the user-supplied 2026-09-15 authoritative A380 destination list)"
   },
   {
     "number": "EK807",
@@ -179,7 +179,7 @@
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "user-supplied 2026-09-14 + research corroboration (known multi-type route — A350/777/A380 all reported operating different AMM frequencies through 2026, do not treat as pure A350)"
+    "sourceRef": "user-supplied 2026-09-14 + research corroboration (known multi-type route — A350/777/A380 all reported operating different AMM frequencies through 2026, do not treat as pure A350; corroborated by the user-supplied 2026-09-15 authoritative A380 destination list, which lists Amman as an active A380 destination — see the new CONFIRMED A380 AMM row below)"
   },
   {
     "number": "EK814",
@@ -193,7 +193,7 @@
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "user-supplied 2026-09-14 + research corroboration (known multi-type route — A350/777/A380 all reported operating different AMM frequencies through 2026, do not treat as pure A350)"
+    "sourceRef": "user-supplied 2026-09-14 + research corroboration (known multi-type route — A350/777/A380 all reported operating different AMM frequencies through 2026, do not treat as pure A350; corroborated by the user-supplied 2026-09-15 authoritative A380 destination list, which lists Amman as an active A380 destination — see the new CONFIRMED A380 AMM row below)"
   },
   {
     "number": "EK815",
@@ -577,11 +577,11 @@
     "staUTCMin": 414,
     "arrivalDayOffset": 1,
     "advertisedType": "A350",
-    "confidence": "ADVERTISED",
+    "confidence": "UNKNOWN",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "user-supplied 2026-09-14 + research corroboration (CONFLICT: user-supplied list places this under A350; independent research this session found BNE listed as a \"Medium confidence\" A380 route with no A350 corroboration found — needs user verification. Block time is an estimate.)"
+    "sourceRef": "user-supplied 2026-09-14 + research corroboration (CONFLICT — LIKELY RESOLVED IN FAVOR OF A380, 2026-09-15: original independent research found BNE listed as a \"Medium confidence\" A380 route with no A350 corroboration; the user's later 2026-09-15 authoritative A380 destination list explicitly confirms Brisbane as an A380 destination and does NOT include it as A350. Confidence lowered from ADVERTISED to UNKNOWN pending correction — this row is kept for history, not as the currently best-supported claim. See the new CONFIRMED A380 BNE row below, which supersedes this one. Block time is an estimate.)"
   },
   {
     "number": "EK842",
@@ -591,11 +591,11 @@
     "staUTCMin": 1426,
     "arrivalDayOffset": 0,
     "advertisedType": "A350",
-    "confidence": "ADVERTISED",
+    "confidence": "UNKNOWN",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "user-supplied 2026-09-14 + research corroboration (CONFLICT: user-supplied list places this under A350; independent research this session found BNE listed as a \"Medium confidence\" A380 route with no A350 corroboration found — needs user verification. Block time is an estimate.)"
+    "sourceRef": "user-supplied 2026-09-14 + research corroboration (CONFLICT — LIKELY RESOLVED IN FAVOR OF A380, 2026-09-15: original independent research found BNE listed as a \"Medium confidence\" A380 route with no A350 corroboration; the user's later 2026-09-15 authoritative A380 destination list explicitly confirms Brisbane as an A380 destination and does NOT include it as A350. Confidence lowered from ADVERTISED to UNKNOWN pending correction — this row is kept for history, not as the currently best-supported claim. See the new CONFIRMED A380 BNE row below, which supersedes this one. Block time is an estimate.)"
   },
   {
     "number": "EK843",
@@ -696,7 +696,7 @@
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "user-supplied 2026-09-14 + research corroboration (from 8 Feb 2026)"
+    "sourceRef": "user-supplied 2026-09-14 + research corroboration (from 8 Feb 2026; now a confirmed multi-type route — see the new CONFIRMED A380 LGW row below, added per the user-supplied 2026-09-15 authoritative A380 destination list)"
   },
   {
     "number": "EK850",
@@ -711,7 +711,7 @@
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "user-supplied 2026-09-14 + research corroboration (from 8 Feb 2026)"
+    "sourceRef": "user-supplied 2026-09-14 + research corroboration (from 8 Feb 2026; now a confirmed multi-type route — see the new CONFIRMED A380 LGW row below, added per the user-supplied 2026-09-15 authoritative A380 destination list)"
   },
   {
     "number": "EK851",
@@ -726,7 +726,7 @@
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "user-supplied 2026-09-14 + research corroboration (from 29 Mar 2026)"
+    "sourceRef": "user-supplied 2026-09-14 + research corroboration (from 29 Mar 2026; now a confirmed multi-type route — see the new CONFIRMED A380 FCO row below, added per the user-supplied 2026-09-15 authoritative A380 destination list)"
   },
   {
     "number": "EK852",
@@ -741,7 +741,7 @@
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "user-supplied 2026-09-14 + research corroboration (from 29 Mar 2026)"
+    "sourceRef": "user-supplied 2026-09-14 + research corroboration (from 29 Mar 2026; now a confirmed multi-type route — see the new CONFIRMED A380 FCO row below, added per the user-supplied 2026-09-15 authoritative A380 destination list)"
   },
   {
     "number": "EK853",
@@ -756,7 +756,7 @@
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "user-supplied 2026-09-14 + research corroboration (from 1 May 2026)"
+    "sourceRef": "user-supplied 2026-09-14 + research corroboration (from 1 May 2026; now a confirmed multi-type route — see the new CONFIRMED A380 TPE row below, added per the user-supplied 2026-09-15 authoritative A380 destination list)"
   },
   {
     "number": "EK854",
@@ -771,7 +771,7 @@
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "user-supplied 2026-09-14 + research corroboration (from 1 May 2026)"
+    "sourceRef": "user-supplied 2026-09-14 + research corroboration (from 1 May 2026; now a confirmed multi-type route — see the new CONFIRMED A380 TPE row below, added per the user-supplied 2026-09-15 authoritative A380 destination list)"
   },
   {
     "number": "EK855",
@@ -843,7 +843,7 @@
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "user-supplied 2026-09-14 + research corroboration (multi-type route — same pattern as CPT/AMM)"
+    "sourceRef": "user-supplied 2026-09-14 + research corroboration (multi-type route — same pattern as CPT/AMM; corroborated by the user-supplied 2026-09-15 authoritative A380 destination list — see the new CONFIRMED A380 KUL row below)"
   },
   {
     "number": "EK860",
@@ -857,7 +857,7 @@
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "user-supplied 2026-09-14 + research corroboration (multi-type route — same pattern as CPT/AMM)"
+    "sourceRef": "user-supplied 2026-09-14 + research corroboration (multi-type route — same pattern as CPT/AMM; corroborated by the user-supplied 2026-09-15 authoritative A380 destination list — see the new CONFIRMED A380 KUL row below)"
   },
   {
     "number": "EK861",
@@ -895,11 +895,12 @@
     "staUTCMin": 1294,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK402",
@@ -909,11 +910,12 @@
     "staUTCMin": 896,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK403",
@@ -923,11 +925,12 @@
     "staUTCMin": 1137,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK404",
@@ -937,11 +940,12 @@
     "staUTCMin": 768,
     "arrivalDayOffset": 1,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK405",
@@ -951,11 +955,12 @@
     "staUTCMin": 178,
     "arrivalDayOffset": 1,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK406",
@@ -965,11 +970,12 @@
     "staUTCMin": 1190,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK407",
@@ -979,11 +985,12 @@
     "staUTCMin": 1276,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK408",
@@ -993,11 +1000,12 @@
     "staUTCMin": 847,
     "arrivalDayOffset": 1,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK409",
@@ -1007,11 +1015,12 @@
     "staUTCMin": 62,
     "arrivalDayOffset": 1,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK410",
@@ -1021,11 +1030,12 @@
     "staUTCMin": 1074,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK411",
@@ -1035,11 +1045,12 @@
     "staUTCMin": 1438,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK412",
@@ -1049,11 +1060,12 @@
     "staUTCMin": 1010,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK413",
@@ -1063,11 +1075,12 @@
     "staUTCMin": 296,
     "arrivalDayOffset": 1,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK414",
@@ -1077,11 +1090,12 @@
     "staUTCMin": 1308,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK415",
@@ -1091,11 +1105,12 @@
     "staUTCMin": 164,
     "arrivalDayOffset": 1,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK416",
@@ -1105,11 +1120,12 @@
     "staUTCMin": 1176,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK417",
@@ -1119,11 +1135,12 @@
     "staUTCMin": 299,
     "arrivalDayOffset": 1,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK418",
@@ -1133,11 +1150,12 @@
     "staUTCMin": 1351,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK419",
@@ -1147,11 +1165,12 @@
     "staUTCMin": 43,
     "arrivalDayOffset": 1,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14 (world's longest A380 route; daily from June 2026)"
+    "sourceRef": "research corroboration 2026-09-14 (world's longest A380 route; daily from June 2026; reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK420",
@@ -1161,11 +1180,12 @@
     "staUTCMin": 1055,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14 (world's longest A380 route; daily from June 2026)"
+    "sourceRef": "research corroboration 2026-09-14 (world's longest A380 route; daily from June 2026; reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK421",
@@ -1175,11 +1195,12 @@
     "staUTCMin": 1097,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK422",
@@ -1189,11 +1210,12 @@
     "staUTCMin": 668,
     "arrivalDayOffset": 1,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK423",
@@ -1203,11 +1225,12 @@
     "staUTCMin": 953,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK424",
@@ -1217,11 +1240,12 @@
     "staUTCMin": 524,
     "arrivalDayOffset": 1,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK425",
@@ -1231,11 +1255,12 @@
     "staUTCMin": 290,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14 (multi-type route — also in the A350 list above; that is expected/correct, real airlines run multiple types on a high-frequency route)"
+    "sourceRef": "research corroboration 2026-09-14 (multi-type route — also in the A350 list above; that is expected/correct, real airlines run multiple types on a high-frequency route; reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK426",
@@ -1245,11 +1270,12 @@
     "staUTCMin": 1301,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14 (multi-type route — also in the A350 list above; that is expected/correct, real airlines run multiple types on a high-frequency route)"
+    "sourceRef": "research corroboration 2026-09-14 (multi-type route — also in the A350 list above; that is expected/correct, real airlines run multiple types on a high-frequency route; reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK427",
@@ -1259,11 +1285,12 @@
     "staUTCMin": 853,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK428",
@@ -1273,11 +1300,12 @@
     "staUTCMin": 454,
     "arrivalDayOffset": 1,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK429",
@@ -1287,11 +1315,12 @@
     "staUTCMin": 363,
     "arrivalDayOffset": 1,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK430",
@@ -1301,11 +1330,12 @@
     "staUTCMin": 1375,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK431",
@@ -1315,11 +1345,12 @@
     "staUTCMin": 424,
     "arrivalDayOffset": 1,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK432",
@@ -1329,11 +1360,12 @@
     "staUTCMin": 1436,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK433",
@@ -1343,11 +1375,12 @@
     "staUTCMin": 1041,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK434",
@@ -1357,11 +1390,12 @@
     "staUTCMin": 613,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK435",
@@ -1371,11 +1405,12 @@
     "staUTCMin": 818,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK436",
@@ -1385,11 +1420,12 @@
     "staUTCMin": 390,
     "arrivalDayOffset": 0,
     "advertisedType": "A380",
-    "confidence": "ADVERTISED",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14"
+    "sourceRef": "research corroboration 2026-09-14 (reconfirmed by user-supplied 2026-09-15 (authoritative A380 destination list))"
   },
   {
     "number": "EK437",
@@ -1403,7 +1439,7 @@
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14 (VOLATILITY: same route as the A350 CPH row above, kept simultaneously — CPH is still transitioning from A380 to A350/777 through late 2026, do not treat as settled)"
+    "sourceRef": "research corroboration 2026-09-14 (VOLATILITY: same route as the A350 CPH row above, kept simultaneously — CPH is still transitioning from A380 to A350/777 through late 2026, do not treat as settled. Not present on the 2026-09-15 A380 destination list, so left unconfirmed.)"
   },
   {
     "number": "EK438",
@@ -1417,94 +1453,10 @@
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14 (VOLATILITY: same route as the A350 CPH row above, kept simultaneously — CPH is still transitioning from A380 to A350/777 through late 2026, do not treat as settled)"
+    "sourceRef": "research corroboration 2026-09-14 (VOLATILITY: same route as the A350 CPH row above, kept simultaneously — CPH is still transitioning from A380 to A350/777 through late 2026, do not treat as settled. Not present on the 2026-09-15 A380 destination list, so left unconfirmed.)"
   },
   {
     "number": "EK439",
-    "depIata": "DXB",
-    "arrIata": "MXP",
-    "stdUTCMin": 875,
-    "staUTCMin": 1240,
-    "arrivalDayOffset": 0,
-    "advertisedType": "A380",
-    "confidence": "ADVERTISED",
-    "daysOfWeek": "1111111",
-    "effectiveFrom": "2026-10-01",
-    "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14 (frequency reportedly halved May 2026 amid regional disruption, current capacity uncertain)"
-  },
-  {
-    "number": "EK440",
-    "depIata": "MXP",
-    "arrIata": "DXB",
-    "stdUTCMin": 447,
-    "staUTCMin": 812,
-    "arrivalDayOffset": 0,
-    "advertisedType": "A380",
-    "confidence": "ADVERTISED",
-    "daysOfWeek": "1111111",
-    "effectiveFrom": "2026-10-01",
-    "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14 (frequency reportedly halved May 2026 amid regional disruption, current capacity uncertain)"
-  },
-  {
-    "number": "EK441",
-    "depIata": "DXB",
-    "arrIata": "GLA",
-    "stdUTCMin": 478,
-    "staUTCMin": 903,
-    "arrivalDayOffset": 0,
-    "advertisedType": "A380",
-    "confidence": "ADVERTISED",
-    "daysOfWeek": "1111111",
-    "effectiveFrom": "2026-10-01",
-    "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14 (reported swapped to 777-300ER in May 2026 amid regional disruption, unclear if reverted by research date)"
-  },
-  {
-    "number": "EK442",
-    "depIata": "GLA",
-    "arrIata": "DXB",
-    "stdUTCMin": 50,
-    "staUTCMin": 475,
-    "arrivalDayOffset": 0,
-    "advertisedType": "A380",
-    "confidence": "ADVERTISED",
-    "daysOfWeek": "1111111",
-    "effectiveFrom": "2026-10-01",
-    "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14 (reported swapped to 777-300ER in May 2026 amid regional disruption, unclear if reverted by research date)"
-  },
-  {
-    "number": "EK443",
-    "depIata": "DXB",
-    "arrIata": "KIX",
-    "stdUTCMin": 1374,
-    "staUTCMin": 524,
-    "arrivalDayOffset": 1,
-    "advertisedType": "A380",
-    "confidence": "ADVERTISED",
-    "daysOfWeek": "1111111",
-    "effectiveFrom": "2026-10-01",
-    "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14 (CONFLICT/VOLATILITY: same airport as the conflicted A350 KIX row above; both rows kept intentionally. Reported swapped to 777-300ER in May 2026 amid regional disruption, unclear if reverted by research date)"
-  },
-  {
-    "number": "EK444",
-    "depIata": "KIX",
-    "arrIata": "DXB",
-    "stdUTCMin": 946,
-    "staUTCMin": 96,
-    "arrivalDayOffset": 1,
-    "advertisedType": "A380",
-    "confidence": "ADVERTISED",
-    "daysOfWeek": "1111111",
-    "effectiveFrom": "2026-10-01",
-    "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14 (CONFLICT/VOLATILITY: same airport as the conflicted A350 KIX row above; both rows kept intentionally. Reported swapped to 777-300ER in May 2026 amid regional disruption, unclear if reverted by research date)"
-  },
-  {
-    "number": "EK445",
     "depIata": "DXB",
     "arrIata": "PRG",
     "stdUTCMin": 685,
@@ -1515,10 +1467,10 @@
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14 (reported swapped to 777-300ER in May 2026 amid regional disruption, unclear if reverted by research date)"
+    "sourceRef": "research corroboration 2026-09-14 (reported swapped to 777-300ER in May 2026 amid regional disruption, unclear if reverted by research date. Not present on the 2026-09-15 A380 destination list, so left unconfirmed.)"
   },
   {
-    "number": "EK446",
+    "number": "EK440",
     "depIata": "PRG",
     "arrIata": "DXB",
     "stdUTCMin": 257,
@@ -1529,6 +1481,906 @@
     "daysOfWeek": "1111111",
     "effectiveFrom": "2026-10-01",
     "effectiveTo": "2026-10-31",
-    "sourceRef": "research corroboration 2026-09-14 (reported swapped to 777-300ER in May 2026 amid regional disruption, unclear if reverted by research date)"
+    "sourceRef": "research corroboration 2026-09-14 (reported swapped to 777-300ER in May 2026 amid regional disruption, unclear if reverted by research date. Not present on the 2026-09-15 A380 destination list, so left unconfirmed.)"
+  },
+  {
+    "number": "EK441",
+    "depIata": "DXB",
+    "arrIata": "MXP",
+    "stdUTCMin": 875,
+    "staUTCMin": 1240,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "research corroboration 2026-09-14 (frequency reportedly halved May 2026 amid regional disruption; the user-supplied 2026-09-15 (authoritative A380 destination list) reconfirms Milan (Malpensa) as an active A380 destination, superseding the May-2026 capacity-uncertainty note with more current information)"
+  },
+  {
+    "number": "EK442",
+    "depIata": "MXP",
+    "arrIata": "DXB",
+    "stdUTCMin": 447,
+    "staUTCMin": 812,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "research corroboration 2026-09-14 (frequency reportedly halved May 2026 amid regional disruption; the user-supplied 2026-09-15 (authoritative A380 destination list) reconfirms Milan (Malpensa) as an active A380 destination, superseding the May-2026 capacity-uncertainty note with more current information)"
+  },
+  {
+    "number": "EK443",
+    "depIata": "DXB",
+    "arrIata": "GLA",
+    "stdUTCMin": 478,
+    "staUTCMin": 903,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "research corroboration 2026-09-14 (reported swapped to 777-300ER in May 2026 amid regional disruption; the user-supplied 2026-09-15 (authoritative A380 destination list) reconfirms Glasgow as an active A380 destination, resolving the May-2026 uncertainty in favor of reverted-to/still-A380)"
+  },
+  {
+    "number": "EK444",
+    "depIata": "GLA",
+    "arrIata": "DXB",
+    "stdUTCMin": 50,
+    "staUTCMin": 475,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "research corroboration 2026-09-14 (reported swapped to 777-300ER in May 2026 amid regional disruption; the user-supplied 2026-09-15 (authoritative A380 destination list) reconfirms Glasgow as an active A380 destination, resolving the May-2026 uncertainty in favor of reverted-to/still-A380)"
+  },
+  {
+    "number": "EK445",
+    "depIata": "DXB",
+    "arrIata": "KIX",
+    "stdUTCMin": 1374,
+    "staUTCMin": 524,
+    "arrivalDayOffset": 1,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "research corroboration 2026-09-14 (VOLATILITY RESOLVED: same airport as the A350 KIX row above (that row's A350/A380 CONFLICT note is left intact, not touched — do not delete history). Reported swapped to 777-300ER in May 2026 amid regional disruption; the user-supplied 2026-09-15 (authoritative A380 destination list) reconfirms KIX as A380, which outweighs the May-2026 research snapshot)"
+  },
+  {
+    "number": "EK446",
+    "depIata": "KIX",
+    "arrIata": "DXB",
+    "stdUTCMin": 946,
+    "staUTCMin": 96,
+    "arrivalDayOffset": 1,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "research corroboration 2026-09-14 (VOLATILITY RESOLVED: same airport as the A350 KIX row above (that row's A350/A380 CONFLICT note is left intact, not touched — do not delete history). Reported swapped to 777-300ER in May 2026 amid regional disruption; the user-supplied 2026-09-15 (authoritative A380 destination list) reconfirms KIX as A380, which outweighs the May-2026 research snapshot)"
+  },
+  {
+    "number": "EK447",
+    "depIata": "DXB",
+    "arrIata": "TPE",
+    "stdUTCMin": 148,
+    "staUTCMin": 678,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (multi-type route — also served by A350 (see A350 TPE row, launched 1 May 2026); a route can carry both an A350 and an A380 frequency, same pattern as BOM. Added per the user-supplied 2026-09-15 (authoritative A380 destination list))"
+  },
+  {
+    "number": "EK448",
+    "depIata": "TPE",
+    "arrIata": "DXB",
+    "stdUTCMin": 1159,
+    "staUTCMin": 249,
+    "arrivalDayOffset": 1,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (multi-type route — also served by A350 (see A350 TPE row, launched 1 May 2026); a route can carry both an A350 and an A380 frequency, same pattern as BOM. Added per the user-supplied 2026-09-15 (authoritative A380 destination list))"
+  },
+  {
+    "number": "EK449",
+    "depIata": "DXB",
+    "arrIata": "AMM",
+    "stdUTCMin": 511,
+    "staUTCMin": 716,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (multi-type route — A350/777/A380 all reported operating different AMM frequencies through 2026 (see A350 AMM row above). Added per the user-supplied 2026-09-15 (authoritative A380 destination list))"
+  },
+  {
+    "number": "EK450",
+    "depIata": "AMM",
+    "arrIata": "DXB",
+    "stdUTCMin": 83,
+    "staUTCMin": 288,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (multi-type route — A350/777/A380 all reported operating different AMM frequencies through 2026 (see A350 AMM row above). Added per the user-supplied 2026-09-15 (authoritative A380 destination list))"
+  },
+  {
+    "number": "EK451",
+    "depIata": "DXB",
+    "arrIata": "JED",
+    "stdUTCMin": 269,
+    "staUTCMin": 409,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (multi-type route — also served by A350 (see A350 JED row above), same multi-type pattern as BOM/TPE. Added per the user-supplied 2026-09-15 (authoritative A380 destination list))"
+  },
+  {
+    "number": "EK452",
+    "depIata": "JED",
+    "arrIata": "DXB",
+    "stdUTCMin": 1280,
+    "staUTCMin": 1420,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (multi-type route — also served by A350 (see A350 JED row above), same multi-type pattern as BOM/TPE. Added per the user-supplied 2026-09-15 (authoritative A380 destination list))"
+  },
+  {
+    "number": "EK453",
+    "depIata": "DXB",
+    "arrIata": "LGW",
+    "stdUTCMin": 833,
+    "staUTCMin": 1273,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (multi-type route — also served by A350 (see A350 LGW row above, CONFIRMED from 8 Feb 2026). Added per the user-supplied 2026-09-15 (authoritative A380 destination list))"
+  },
+  {
+    "number": "EK454",
+    "depIata": "LGW",
+    "arrIata": "DXB",
+    "stdUTCMin": 405,
+    "staUTCMin": 845,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (multi-type route — also served by A350 (see A350 LGW row above, CONFIRMED from 8 Feb 2026). Added per the user-supplied 2026-09-15 (authoritative A380 destination list))"
+  },
+  {
+    "number": "EK455",
+    "depIata": "DXB",
+    "arrIata": "FCO",
+    "stdUTCMin": 691,
+    "staUTCMin": 1056,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (multi-type route — also served by A350 (see A350 FCO row above, CONFIRMED from 29 Mar 2026). Added per the user-supplied 2026-09-15 (authoritative A380 destination list))"
+  },
+  {
+    "number": "EK456",
+    "depIata": "FCO",
+    "arrIata": "DXB",
+    "stdUTCMin": 263,
+    "staUTCMin": 628,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (multi-type route — also served by A350 (see A350 FCO row above, CONFIRMED from 29 Mar 2026). Added per the user-supplied 2026-09-15 (authoritative A380 destination list))"
+  },
+  {
+    "number": "EK457",
+    "depIata": "DXB",
+    "arrIata": "KUL",
+    "stdUTCMin": 295,
+    "staUTCMin": 735,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (multi-type route — also served by A350 (see A350 KUL row above, \"same pattern as CPT/AMM\"). Added per the user-supplied 2026-09-15 (authoritative A380 destination list))"
+  },
+  {
+    "number": "EK458",
+    "depIata": "KUL",
+    "arrIata": "DXB",
+    "stdUTCMin": 1306,
+    "staUTCMin": 306,
+    "arrivalDayOffset": 1,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (multi-type route — also served by A350 (see A350 KUL row above, \"same pattern as CPT/AMM\"). Added per the user-supplied 2026-09-15 (authoritative A380 destination list))"
+  },
+  {
+    "number": "EK459",
+    "depIata": "DXB",
+    "arrIata": "BNE",
+    "stdUTCMin": 56,
+    "staUTCMin": 896,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (resolves the earlier A350/A380 conflict on this route (see the now-downgraded A350 BNE row above) in favor of A380, per the user-supplied 2026-09-15 (authoritative A380 destination list))"
+  },
+  {
+    "number": "EK460",
+    "depIata": "BNE",
+    "arrIata": "DXB",
+    "stdUTCMin": 1067,
+    "staUTCMin": 467,
+    "arrivalDayOffset": 1,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (resolves the earlier A350/A380 conflict on this route (see the now-downgraded A350 BNE row above) in favor of A380, per the user-supplied 2026-09-15 (authoritative A380 destination list))"
+  },
+  {
+    "number": "EK461",
+    "depIata": "DXB",
+    "arrIata": "AMS",
+    "stdUTCMin": 517,
+    "staUTCMin": 922,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK462",
+    "depIata": "AMS",
+    "arrIata": "DXB",
+    "stdUTCMin": 89,
+    "staUTCMin": 494,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK463",
+    "depIata": "DXB",
+    "arrIata": "BCN",
+    "stdUTCMin": 1163,
+    "staUTCMin": 118,
+    "arrivalDayOffset": 1,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK464",
+    "depIata": "BCN",
+    "arrIata": "DXB",
+    "stdUTCMin": 735,
+    "staUTCMin": 1130,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK465",
+    "depIata": "DXB",
+    "arrIata": "BHX",
+    "stdUTCMin": 1328,
+    "staUTCMin": 318,
+    "arrivalDayOffset": 1,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK466",
+    "depIata": "BHX",
+    "arrIata": "DXB",
+    "stdUTCMin": 900,
+    "staUTCMin": 1330,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK467",
+    "depIata": "DXB",
+    "arrIata": "DUS",
+    "stdUTCMin": 770,
+    "staUTCMin": 1150,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK468",
+    "depIata": "DUS",
+    "arrIata": "DXB",
+    "stdUTCMin": 342,
+    "staUTCMin": 722,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK469",
+    "depIata": "DXB",
+    "arrIata": "FRA",
+    "stdUTCMin": 1142,
+    "staUTCMin": 82,
+    "arrivalDayOffset": 1,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK470",
+    "depIata": "FRA",
+    "arrIata": "DXB",
+    "stdUTCMin": 714,
+    "staUTCMin": 1094,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK471",
+    "depIata": "DXB",
+    "arrIata": "MAD",
+    "stdUTCMin": 150,
+    "staUTCMin": 560,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK472",
+    "depIata": "MAD",
+    "arrIata": "DXB",
+    "stdUTCMin": 1161,
+    "staUTCMin": 131,
+    "arrivalDayOffset": 1,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK473",
+    "depIata": "DXB",
+    "arrIata": "MAN",
+    "stdUTCMin": 160,
+    "staUTCMin": 595,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK474",
+    "depIata": "MAN",
+    "arrIata": "DXB",
+    "stdUTCMin": 1171,
+    "staUTCMin": 166,
+    "arrivalDayOffset": 1,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK475",
+    "depIata": "DXB",
+    "arrIata": "SVO",
+    "stdUTCMin": 822,
+    "staUTCMin": 1127,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (Sheremetyevo — Emirates' typical Moscow gateway)"
+  },
+  {
+    "number": "EK476",
+    "depIata": "SVO",
+    "arrIata": "DXB",
+    "stdUTCMin": 394,
+    "staUTCMin": 699,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (Sheremetyevo — Emirates' typical Moscow gateway)"
+  },
+  {
+    "number": "EK477",
+    "depIata": "DXB",
+    "arrIata": "NCE",
+    "stdUTCMin": 1174,
+    "staUTCMin": 129,
+    "arrivalDayOffset": 1,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK478",
+    "depIata": "NCE",
+    "arrIata": "DXB",
+    "stdUTCMin": 746,
+    "staUTCMin": 1141,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK479",
+    "depIata": "DXB",
+    "arrIata": "CDG",
+    "stdUTCMin": 709,
+    "staUTCMin": 1119,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK480",
+    "depIata": "CDG",
+    "arrIata": "DXB",
+    "stdUTCMin": 281,
+    "staUTCMin": 691,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK481",
+    "depIata": "DXB",
+    "arrIata": "VIE",
+    "stdUTCMin": 414,
+    "staUTCMin": 759,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK482",
+    "depIata": "VIE",
+    "arrIata": "DXB",
+    "stdUTCMin": 1425,
+    "staUTCMin": 330,
+    "arrivalDayOffset": 1,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK483",
+    "depIata": "DXB",
+    "arrIata": "ZRH",
+    "stdUTCMin": 223,
+    "staUTCMin": 593,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK484",
+    "depIata": "ZRH",
+    "arrIata": "DXB",
+    "stdUTCMin": 1234,
+    "staUTCMin": 164,
+    "arrivalDayOffset": 1,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK485",
+    "depIata": "DXB",
+    "arrIata": "DPS",
+    "stdUTCMin": 615,
+    "staUTCMin": 1115,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK486",
+    "depIata": "DPS",
+    "arrIata": "DXB",
+    "stdUTCMin": 187,
+    "staUTCMin": 687,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK487",
+    "depIata": "DXB",
+    "arrIata": "BLR",
+    "stdUTCMin": 7,
+    "staUTCMin": 217,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK488",
+    "depIata": "BLR",
+    "arrIata": "DXB",
+    "stdUTCMin": 1018,
+    "staUTCMin": 1228,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK489",
+    "depIata": "DXB",
+    "arrIata": "CHC",
+    "stdUTCMin": 829,
+    "staUTCMin": 319,
+    "arrivalDayOffset": 1,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (modeled as one representative direct daily line per this generator's existing convention (see the file-header judgment-call note); in reality Emirates routes CHC via SYD/AKL rather than nonstop from DXB)"
+  },
+  {
+    "number": "EK490",
+    "depIata": "CHC",
+    "arrIata": "DXB",
+    "stdUTCMin": 401,
+    "staUTCMin": 1331,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list) (modeled as one representative direct daily line per this generator's existing convention (see the file-header judgment-call note); in reality Emirates routes CHC via SYD/AKL rather than nonstop from DXB)"
+  },
+  {
+    "number": "EK491",
+    "depIata": "DXB",
+    "arrIata": "ICN",
+    "stdUTCMin": 695,
+    "staUTCMin": 1265,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK492",
+    "depIata": "ICN",
+    "arrIata": "DXB",
+    "stdUTCMin": 267,
+    "staUTCMin": 837,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK493",
+    "depIata": "DXB",
+    "arrIata": "PVG",
+    "stdUTCMin": 809,
+    "staUTCMin": 1329,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK494",
+    "depIata": "PVG",
+    "arrIata": "DXB",
+    "stdUTCMin": 381,
+    "staUTCMin": 901,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK495",
+    "depIata": "DXB",
+    "arrIata": "NRT",
+    "stdUTCMin": 215,
+    "staUTCMin": 790,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK496",
+    "depIata": "NRT",
+    "arrIata": "DXB",
+    "stdUTCMin": 1226,
+    "staUTCMin": 361,
+    "arrivalDayOffset": 1,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK497",
+    "depIata": "DXB",
+    "arrIata": "CMN",
+    "stdUTCMin": 995,
+    "staUTCMin": 30,
+    "arrivalDayOffset": 1,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK498",
+    "depIata": "CMN",
+    "arrIata": "DXB",
+    "stdUTCMin": 567,
+    "staUTCMin": 1042,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK499",
+    "depIata": "DXB",
+    "arrIata": "MRU",
+    "stdUTCMin": 694,
+    "staUTCMin": 1019,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
+  },
+  {
+    "number": "EK500",
+    "depIata": "MRU",
+    "arrIata": "DXB",
+    "stdUTCMin": 266,
+    "staUTCMin": 591,
+    "arrivalDayOffset": 0,
+    "advertisedType": "A380",
+    "observedType": "A380",
+    "confidence": "CONFIRMED",
+    "daysOfWeek": "1111111",
+    "effectiveFrom": "2026-10-01",
+    "effectiveTo": "2026-10-31",
+    "sourceRef": "user-supplied 2026-09-15 (authoritative A380 destination list)"
   }
 ]
