@@ -25,3 +25,13 @@ All logged in full, with reasoning, in `docs/pairing-assumptions.md` rather
 than here, to keep this file's Phase 1 header (which points readers to
 deviation logs vs. assumption logs) accurate as the two document types
 diverge by phase.
+
+Phase 4 (automatic monthly roster generator) introduced its own set of
+judgment calls — the single-month-history limitations (12-month rolling
+block time, the days-off-in-N-days window checks), the always-acclimatised
+simplification, the generator's own construction-heuristic constants (not
+new GCAA numbers), the layover-day-counts-as-duty-day reading, the
+rest-location inference at pairing boundaries, the never-rest-checking-the-
+first-duty-of-the-month limitation, deterministic (not true-random)
+candidate ordering, and the FLIGHT/OFF-only auto-assignment scope. All
+logged in full, with reasoning, in `docs/roster-gen-assumptions.md`.
