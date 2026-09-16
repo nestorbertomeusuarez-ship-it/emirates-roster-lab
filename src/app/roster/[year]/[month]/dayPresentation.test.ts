@@ -163,4 +163,89 @@ describe('buildWorstSeverityMap', () => {
 
     expect(map.has('2026-10-06')).toBe(false);
   });
+
+  it('reports GREEN when a day\'s only findings are operator-specific AMBER', () => {
+    // Direct user feedback (2026-09-16): the 2 known OPERATOR_SPECIFIC
+    // placeholders fire identically on every flying day — this must not
+    // headline the calendar badge as AMBER when nothing real is wrong.
+    const evaluations: DatedRuleEvaluation[] = [
+      {
+        date: '2026-10-05',
+        evaluation: makeEvaluation({
+          ruleId: 'operator-ulr-ftl-variation-scheme',
+          severity: 'AMBER',
+          isOperatorSpecific: true,
+        }),
+      },
+      {
+        date: '2026-10-05',
+        evaluation: makeEvaluation({
+          ruleId: 'operator-augmented-crew-rest-facility-table',
+          severity: 'AMBER',
+          isOperatorSpecific: true,
+        }),
+      },
+    ];
+
+    const map = buildWorstSeverityMap(evaluations);
+
+    expect(map.get('2026-10-05')).toBe('GREEN');
+  });
+
+  it('ignores operator-specific AMBER and reports the real GREEN worst instead', () => {
+    const evaluations: DatedRuleEvaluation[] = [
+      { date: '2026-10-05', evaluation: makeEvaluation({ ruleId: 'fdp-table', severity: 'GREEN' }) },
+      {
+        date: '2026-10-05',
+        evaluation: makeEvaluation({
+          ruleId: 'operator-ulr-ftl-variation-scheme',
+          severity: 'AMBER',
+          isOperatorSpecific: true,
+        }),
+      },
+    ];
+
+    const map = buildWorstSeverityMap(evaluations);
+
+    expect(map.get('2026-10-05')).toBe('GREEN');
+  });
+
+  it('still reports a real (non-operator-specific) RED even alongside operator-specific AMBER', () => {
+    const evaluations: DatedRuleEvaluation[] = [
+      {
+        date: '2026-10-05',
+        evaluation: makeEvaluation({
+          ruleId: 'operator-ulr-ftl-variation-scheme',
+          severity: 'AMBER',
+          isOperatorSpecific: true,
+        }),
+      },
+      { date: '2026-10-05', evaluation: makeEvaluation({ ruleId: 'min-rest', severity: 'RED' }) },
+    ];
+
+    const map = buildWorstSeverityMap(evaluations);
+
+    expect(map.get('2026-10-05')).toBe('RED');
+  });
+
+  it('still reports a real (non-operator-specific) AMBER even alongside operator-specific AMBER', () => {
+    const evaluations: DatedRuleEvaluation[] = [
+      {
+        date: '2026-10-05',
+        evaluation: makeEvaluation({
+          ruleId: 'operator-ulr-ftl-variation-scheme',
+          severity: 'AMBER',
+          isOperatorSpecific: true,
+        }),
+      },
+      {
+        date: '2026-10-05',
+        evaluation: makeEvaluation({ ruleId: 'cumulative-limits', severity: 'AMBER' }),
+      },
+    ];
+
+    const map = buildWorstSeverityMap(evaluations);
+
+    expect(map.get('2026-10-05')).toBe('AMBER');
+  });
 });

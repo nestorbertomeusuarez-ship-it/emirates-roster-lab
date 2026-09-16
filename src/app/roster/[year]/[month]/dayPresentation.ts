@@ -98,9 +98,29 @@ export function buildDayCategoryMap(days: RosterGenDay[]): Map<string, DayCatego
  * `CompliancePanel` already renders. `groupEvaluationsByDate` already sorts
  * each day worst-severity-first (RED, then AMBER, then GREEN — see
  * `complianceGrouping.ts`), so the worst entry is simply the first one per
- * day.
+ * day, once operator-specific findings are set aside (see below).
  *
- * A date absent from the result had no evaluations that day — this is
+ * Direct user feedback (2026-09-16): the 2 remaining `OPERATOR_SPECIFIC`
+ * placeholders (`operator-ulr-ftl-variation-scheme`,
+ * `operator-augmented-crew-rest-facility-table` — see
+ * `src/ftl/rules/operatorSpecific.ts`) fire on essentially every flying day
+ * with near-identical AMBER text, since they are per-duty checks with no
+ * day-specific content. Left in the "worst severity" calculation, they drown
+ * out real per-day signal — every flying day shows AMBER even when nothing
+ * is actually wrong. This is presentation-layer filtering only: every
+ * operator-specific finding is still fully surfaced, in full, by
+ * `CompliancePanel`'s separate deduplicated section (see
+ * `complianceGrouping.ts#groupOperatorSpecificFindings`) — this function
+ * only decides what the CALENDAR BADGE headlines.
+ *
+ * For each day: the worst NON-operator-specific severity wins, if any exist.
+ * When a day's only findings are operator-specific (no real GCAA-sourced
+ * concern was raised for that day), the badge reports GREEN rather than
+ * AMBER — there is no known compliance issue from public data, and the
+ * operator-specific caveat remains fully visible below, just not repeated as
+ * a false-alarm headline on every single day.
+ *
+ * A date absent from the result had no evaluations that day at all — this is
  * expected and normal for LAYOVER and DXB_OFF days, since
  * `evaluateRosterDays` only produces evaluations for days with an actual
  * flying leg (see `generateMonthlyRoster.ts`'s `evaluateRosterDays`).
@@ -111,8 +131,10 @@ export function buildWorstSeverityMap(
   const grouped = groupEvaluationsByDate(evaluations);
   const map = new Map<string, Severity>();
   for (const day of grouped) {
-    const worst = day.evaluations[0];
-    if (worst) map.set(day.date, worst.severity);
+    if (day.evaluations.length === 0) continue;
+    const nonOperatorSpecific = day.evaluations.filter((e) => !e.isOperatorSpecific);
+    const worst = nonOperatorSpecific[0];
+    map.set(day.date, worst ? worst.severity : 'GREEN');
   }
   return map;
 }
