@@ -35,12 +35,14 @@ import { buildPairingTimelineRows, type PairingTimelineRow } from './pairing/[pa
  * A LAYOVER-category day (no leg operates that date — a pure rest day
  * within an active pairing, per `dayPresentation.ts#classifyDayCategory`)
  * has nothing flown to summarize, but the outstation the crew is currently
- * at is still useful at-a-glance context, so it gets its own compact
- * variant rather than being omitted entirely.
+ * at, and the total layover duration, are still useful at-a-glance context
+ * (direct user feedback, 2026-09-16: "en layover quiero ver directamente
+ * cuántas horas dura"), so it gets its own compact variant rather than
+ * being omitted entirely.
  */
 export type FlightDaySummary =
   | { category: 'FLIGHT'; route: string; blockMinutes: number; dutyMinutes: number }
-  | { category: 'LAYOVER'; atIata: string };
+  | { category: 'LAYOVER'; atIata: string; layoverMinutes: number };
 
 /**
  * Builds a date ('YYYY-MM-DD') -> `FlightDaySummary` lookup for a whole
@@ -89,8 +91,22 @@ export function buildFlightDaySummaryMap(
       .filter((leg) => leg.instance.serviceDate < day.date)
       .sort((a, b) => a.instance.serviceDate.localeCompare(b.instance.serviceDate))
       .pop();
-    if (lastPriorLeg) {
-      map.set(day.date, { category: 'LAYOVER', atIata: lastPriorLeg.instance.arrIata });
+    // Total layover duration is `layoverMinutesBeforeThisLeg` on the leg
+    // that ENDS the rest period — the next leg chronologically, whose
+    // ground-time-before-departure (`dutyTimes.ts#layoverMinutes`: raw
+    // arrival-to-next-departure time) IS the whole gap this day falls
+    // within. Every LAYOVER day of a multi-day rest period shares this same
+    // value, mirroring how `dailyDutyMinutes` is shared across legs of one
+    // calendar day above.
+    const nextLeg = pairing.legs
+      .filter((leg) => leg.instance.serviceDate > day.date)
+      .sort((a, b) => a.instance.serviceDate.localeCompare(b.instance.serviceDate))[0];
+    if (lastPriorLeg && nextLeg && nextLeg.layoverMinutesBeforeThisLeg !== null) {
+      map.set(day.date, {
+        category: 'LAYOVER',
+        atIata: lastPriorLeg.instance.arrIata,
+        layoverMinutes: nextLeg.layoverMinutesBeforeThisLeg,
+      });
     }
   }
 

@@ -136,7 +136,7 @@ function FlightSummaryLine({ summary }: { summary: FlightDaySummary }) {
   if (summary.category === 'LAYOVER') {
     return (
       <div className="text-zinc-500 dark:text-zinc-400 text-xs md:text-[10px]">
-        at {summary.atIata}
+        at {summary.atIata} &middot; {formatMinutes(summary.layoverMinutes)} layover
       </div>
     );
   }

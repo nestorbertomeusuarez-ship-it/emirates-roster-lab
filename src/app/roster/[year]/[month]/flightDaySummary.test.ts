@@ -144,8 +144,67 @@ describe('buildFlightDaySummaryMap', () => {
     const map = buildFlightDaySummaryMap(days, TZ);
 
     expect(map.get('2026-10-05')).toMatchObject({ category: 'FLIGHT', route: 'DXB→BLR' });
-    expect(map.get('2026-10-06')).toEqual({ category: 'LAYOVER', atIata: 'BLR' });
+    // layoverMinutesBeforeThisLeg on the leg that ENDS the layover (the
+    // 2026-10-07 BLR->DXB leg in this fixture) is the total ground time of
+    // the rest period the LAYOVER day falls within — 2760 min = 46h.
+    expect(map.get('2026-10-06')).toEqual({ category: 'LAYOVER', atIata: 'BLR', layoverMinutes: 2760 });
     expect(map.get('2026-10-07')).toMatchObject({ category: 'FLIGHT', route: 'BLR→DXB' });
+  });
+
+  it('shows the same total layover duration on every LAYOVER day within a multi-day rest period', () => {
+    // A 4-day pairing: fly out day 1, two full LAYOVER days (2 and 3) at the
+    // outstation, fly home day 4. Both LAYOVER days must report the SAME
+    // total ground-time duration (the whole gap, not a per-day fraction of
+    // it) — direct user feedback: "quiero ver cuántas horas dura [el
+    // layover]".
+    const pairing: GeneratedPairing = {
+      fleetType: 'A350',
+      startServiceDate: '2026-10-10',
+      endServiceDate: '2026-10-13',
+      tripDays: 4,
+      legs: [
+        {
+          layoverMinutesBeforeThisLeg: null,
+          instance: {
+            scheduleLineId: 'line-0',
+            number: 'EK201',
+            depIata: 'DXB',
+            arrIata: 'JFK',
+            serviceDate: '2026-10-10',
+            depUTC: new Date('2026-10-10T02:00:00.000Z'),
+            arrUTC: new Date('2026-10-10T12:00:00.000Z'),
+            blockTimeMin: 600,
+            aircraftType: 'A350',
+          },
+        },
+        {
+          // 2 full days + a bit of ground time before the return leg departs.
+          layoverMinutesBeforeThisLeg: 60 * 55,
+          instance: {
+            scheduleLineId: 'line-1',
+            number: 'EK202',
+            depIata: 'JFK',
+            arrIata: 'DXB',
+            serviceDate: '2026-10-13',
+            depUTC: new Date('2026-10-13T19:00:00.000Z'),
+            arrUTC: new Date('2026-10-14T15:00:00.000Z'),
+            blockTimeMin: 720,
+            aircraftType: 'A350',
+          },
+        },
+      ],
+    };
+    const days: RosterGenDay[] = [
+      { date: '2026-10-10', assignment: { type: 'FLIGHT', pairing, dayOfPairing: 1 } },
+      { date: '2026-10-11', assignment: { type: 'FLIGHT', pairing, dayOfPairing: 2 } },
+      { date: '2026-10-12', assignment: { type: 'FLIGHT', pairing, dayOfPairing: 3 } },
+      { date: '2026-10-13', assignment: { type: 'FLIGHT', pairing, dayOfPairing: 4 } },
+    ];
+
+    const map = buildFlightDaySummaryMap(days, TZ);
+
+    expect(map.get('2026-10-11')).toEqual({ category: 'LAYOVER', atIata: 'JFK', layoverMinutes: 60 * 55 });
+    expect(map.get('2026-10-12')).toEqual({ category: 'LAYOVER', atIata: 'JFK', layoverMinutes: 60 * 55 });
   });
 
   it('chains a route across a same-day 2-leg quick-turn/transit day and sums both legs block time', () => {
