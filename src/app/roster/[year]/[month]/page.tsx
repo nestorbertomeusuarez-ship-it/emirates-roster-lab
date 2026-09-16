@@ -30,6 +30,7 @@ import DayCard from './DayCard';
 import CompliancePanel from './CompliancePanel';
 import { generateRosterAction } from './actions';
 import { buildDayCategoryMap, buildWorstSeverityMap } from './dayPresentation';
+import { buildFlightDaySummaryMap } from './flightDaySummary';
 import { nextMonth, previousMonth } from './adjacentMonth';
 import { hasNoScheduleDataForMonth } from './emptyScheduleData';
 
@@ -114,6 +115,13 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
   // evaluation.
   const dayCategoryByDate = buildDayCategoryMap(rosterGenDays);
   const worstSeverityByDate = buildWorstSeverityMap(complianceEvaluations);
+
+  // Direct user feedback (2026-09-16): show the actual pairing/route/block/
+  // duty right on the calendar card instead of forcing a click-through to
+  // the pairing detail page for a FLIGHT day. Built from the exact same
+  // `rosterGenDays` data as the maps above (see flightDaySummary.ts) — no
+  // new evaluation, no additional DB query.
+  const flightDaySummaryByDate = buildFlightDaySummaryMap(rosterGenDays, airportTimeZones);
 
   const pairings = await generatePairingsForMonth(prisma, year, month, UI_PAIRING_CONSTRAINTS);
   const candidatesByStartDate = new Map<string, GeneratedPairing[]>();
@@ -227,6 +235,7 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
             candidates={candidatesByStartDate.get(cell.date) ?? []}
             category={dayCategoryByDate.get(cell.date) ?? null}
             severity={worstSeverityByDate.get(cell.date) ?? null}
+            flightSummary={flightDaySummaryByDate.get(cell.date) ?? null}
             isToday={isCurrentMonth && cell.date === todayIso}
           />
         ))}

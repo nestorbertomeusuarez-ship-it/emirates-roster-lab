@@ -5,6 +5,7 @@ import { DUTY_TYPES } from '@/pairing/types';
 import type { Severity } from '@/ftl/types';
 import type { CalendarBadgeCategory, DayCategory } from './dayPresentation';
 import { resolveCalendarBadgeCategory } from './dayPresentation';
+import type { FlightDaySummary } from './flightDaySummary';
 import {
   assignPairingDutyAction,
   assignSimpleDutyAction,
@@ -36,6 +37,15 @@ interface DayCardProps {
    * jump-to-detail link.
    */
   severity: Severity | null;
+  /**
+   * Direct user feedback (2026-09-16): compact per-day route/block/duty for
+   * a FLIGHT-category day (or the crew's current outstation for a
+   * LAYOVER-category day within an active pairing), computed by
+   * `flightDaySummary.ts` from data `page.tsx` already loads — see that
+   * module's doc comment. Null for a DXB_OFF day or a day with no FLIGHT
+   * assignment at all.
+   */
+  flightSummary: FlightDaySummary | null;
   /**
    * Whether this cell is today's real-world date, pre-computed by the page
    * (UTC-day convention, see docs/roster-gen-assumptions.md item 16) —
@@ -105,6 +115,39 @@ function weekdayLabelFor(date: string): string {
   return MOBILE_WEEKDAY_LABELS[(utcDay + 6) % 7];
 }
 
+// Same 'HhMMm' format `PairingTimeline.tsx#formatMinutes` already uses for
+// block/duty times — kept consistent rather than inventing a third format
+// (see this project's dutyTimes.ts / CompliancePanel.tsx conventions).
+function formatMinutes(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours}h${String(mins).padStart(2, '0')}m`;
+}
+
+/**
+ * Compact one-line flight/layover summary rendered directly under a FLIGHT-
+ * category day's existing "FLIGHT (2d)" label/link — not replacing it (see
+ * flightDaySummary.ts's doc comment). Deliberately terse: this project just
+ * went through a decluttering pass to reduce card density (see the
+ * `<details>` disclosure below), so this is a quick at-a-glance addition,
+ * not a repeat of the full pairing-detail timeline.
+ */
+function FlightSummaryLine({ summary }: { summary: FlightDaySummary }) {
+  if (summary.category === 'LAYOVER') {
+    return (
+      <div className="text-zinc-500 dark:text-zinc-400 text-xs md:text-[10px]">
+        at {summary.atIata}
+      </div>
+    );
+  }
+  return (
+    <div className="text-zinc-500 dark:text-zinc-400 text-xs md:text-[10px]">
+      {summary.route} &middot; {formatMinutes(summary.blockMinutes)} blk &middot;{' '}
+      {formatMinutes(summary.dutyMinutes)} duty
+    </div>
+  );
+}
+
 function summarizePairing(pairing: GeneratedPairing): string {
   const route = pairing.legs.map((leg) => leg.instance.depIata).concat(
     pairing.legs[pairing.legs.length - 1].instance.arrIata
@@ -133,6 +176,7 @@ export default function DayCard({
   candidates,
   category,
   severity,
+  flightSummary,
   isToday,
 }: DayCardProps) {
   const dayNumber = Number(date.slice(8, 10));
@@ -282,37 +326,43 @@ export default function DayCard({
       )}
 
       {isPairingContinuation ? (
-        pairingHref ? (
-          <Link
-            href={pairingHref}
-            className="rounded bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100 px-1 py-0.5 block underline"
-          >
-            Pairing cont&apos;d (day {dayOfPairing})
-          </Link>
-        ) : (
-          <div className="rounded bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100 px-1 py-0.5">
-            Pairing cont&apos;d (day {dayOfPairing})
-          </div>
-        )
+        <>
+          {pairingHref ? (
+            <Link
+              href={pairingHref}
+              className="rounded bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100 px-1 py-0.5 block underline"
+            >
+              Pairing cont&apos;d (day {dayOfPairing})
+            </Link>
+          ) : (
+            <div className="rounded bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100 px-1 py-0.5">
+              Pairing cont&apos;d (day {dayOfPairing})
+            </div>
+          )}
+          {flightSummary && <FlightSummaryLine summary={flightSummary} />}
+        </>
       ) : entry ? (
-        pairingHref ? (
-          <Link
-            href={pairingHref}
-            className="rounded bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 px-1 py-0.5 block underline"
-          >
-            {entry.dutyType}
-            {entry.dutyType === 'FLIGHT' && entry.spansDays
-              ? ` (${entry.spansDays}d)`
-              : ''}
-          </Link>
-        ) : (
-          <div className="rounded bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 px-1 py-0.5">
-            {entry.dutyType}
-            {entry.dutyType === 'FLIGHT' && entry.spansDays
-              ? ` (${entry.spansDays}d)`
-              : ''}
-          </div>
-        )
+        <>
+          {pairingHref ? (
+            <Link
+              href={pairingHref}
+              className="rounded bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 px-1 py-0.5 block underline"
+            >
+              {entry.dutyType}
+              {entry.dutyType === 'FLIGHT' && entry.spansDays
+                ? ` (${entry.spansDays}d)`
+                : ''}
+            </Link>
+          ) : (
+            <div className="rounded bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 px-1 py-0.5">
+              {entry.dutyType}
+              {entry.dutyType === 'FLIGHT' && entry.spansDays
+                ? ` (${entry.spansDays}d)`
+                : ''}
+            </div>
+          )}
+          {flightSummary && <FlightSummaryLine summary={flightSummary} />}
+        </>
       ) : (
         <div className="text-zinc-400">unassigned</div>
       )}
