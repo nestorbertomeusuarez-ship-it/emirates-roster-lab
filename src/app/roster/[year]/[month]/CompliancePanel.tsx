@@ -51,7 +51,21 @@ function formatMargin(marginMinutes: number | undefined): string | null {
   return `margin ${sign}${hours}h${minutes}m`;
 }
 
-function EvaluationRow({ evaluation }: { evaluation: RuleEvaluation }) {
+function EvaluationRow({
+  evaluation,
+  children,
+}: {
+  evaluation: RuleEvaluation;
+  /**
+   * Extra content rendered inside this row's own `<li>` — e.g. the
+   * operator-specific section's "applies to N days" disclosure. Must NOT be
+   * a sibling `<li>` wrapping this component: `<li>` cannot nest inside
+   * `<li>` in valid HTML (this exact bug caused a hydration error — see
+   * commit history), so any per-row extra content belongs HERE, inside this
+   * single `<li>`, not wrapped around it.
+   */
+  children?: React.ReactNode;
+}) {
   const margin = formatMargin(evaluation.marginMinutes);
 
   return (
@@ -68,6 +82,7 @@ function EvaluationRow({ evaluation }: { evaluation: RuleEvaluation }) {
       </div>
       <div>{evaluation.message}</div>
       {margin && <div className="text-[10px] opacity-75">{margin}</div>}
+      {children}
     </li>
   );
 }
@@ -128,15 +143,17 @@ export default function CompliancePanel({ evaluations }: CompliancePanelProps) {
           </p>
           <ul className="flex flex-col gap-2">
             {operatorSpecificGroups.map((group) => (
-              <li key={`${group.evaluation.citation.ruleId}-${group.evaluation.message}`}>
-                <EvaluationRow evaluation={group.evaluation} />
+              <EvaluationRow
+                key={`${group.evaluation.citation.ruleId}-${group.evaluation.message}`}
+                evaluation={group.evaluation}
+              >
                 <details className="mt-0.5">
                   <summary className="cursor-pointer select-none text-zinc-500 dark:text-zinc-400 underline text-[10px]">
                     applies to {group.dates.length} day{group.dates.length === 1 ? '' : 's'}
                   </summary>
                   <div className="mt-0.5 text-[10px] opacity-75">{group.dates.join(', ')}</div>
                 </details>
-              </li>
+              </EvaluationRow>
             ))}
           </ul>
         </div>
