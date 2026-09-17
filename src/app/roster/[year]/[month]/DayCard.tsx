@@ -6,6 +6,7 @@ import type { Severity } from '@/ftl/types';
 import type { CalendarBadgeCategory, DayCategory } from './dayPresentation';
 import { resolveCalendarBadgeCategory } from './dayPresentation';
 import type { FlightDaySummary } from './flightDaySummary';
+import { cityLabel } from '@/lib/airportCityNames';
 import {
   assignPairingDutyAction,
   assignSimpleDutyAction,
@@ -136,14 +137,14 @@ function FlightSummaryLine({ summary }: { summary: FlightDaySummary }) {
   if (summary.category === 'LAYOVER') {
     return (
       <div className="text-zinc-500 dark:text-zinc-400 text-xs md:text-[10px]">
-        at {summary.atIata} &middot; {formatMinutes(summary.layoverMinutes)} layover
+        at {cityLabel(summary.atIata)} &middot; {formatMinutes(summary.layoverMinutes)} layover
       </div>
     );
   }
   return (
     <div className="text-zinc-500 dark:text-zinc-400 text-xs md:text-[10px]">
-      {summary.route} &middot; {formatMinutes(summary.blockMinutes)} blk &middot;{' '}
-      {formatMinutes(summary.dutyMinutes)} duty
+      {summary.route.split('→').map(cityLabel).join(' → ')} &middot;{' '}
+      {formatMinutes(summary.blockMinutes)} blk &middot; {formatMinutes(summary.dutyMinutes)} duty
     </div>
   );
 }
@@ -166,10 +167,13 @@ function tripDayLabel(dayOfPairing: number | null, spansDays: number | null): st
 // separate FlightSummaryLine below the day/trip label. Extracts just the
 // day's final arrival station (the route's last leg, for a same-day
 // multi-leg transit day too) to append inline on the label line itself.
+// Also direct user feedback: "añade al codigo IATA de destino el nombre
+// de la ciudad, dxb no hace falta" — see src/lib/airportCityNames.ts.
 function flightDestination(summary: FlightDaySummary | null): string {
   if (!summary || summary.category !== 'FLIGHT') return '';
   const legs = summary.route.split('→');
-  return legs[legs.length - 1] ?? '';
+  const lastLeg = legs[legs.length - 1];
+  return lastLeg ? cityLabel(lastLeg) : '';
 }
 
 function summarizePairing(pairing: GeneratedPairing): string {
