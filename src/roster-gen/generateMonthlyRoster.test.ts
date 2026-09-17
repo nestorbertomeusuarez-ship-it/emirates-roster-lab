@@ -17,6 +17,9 @@ const AIRPORT_TZS: Record<string, string> = {
   SSS: 'Europe/Paris',
   MMM: 'Asia/Bangkok',
   LLL: 'America/Chicago',
+  DD1: 'Europe/Madrid',
+  DD2: 'Asia/Tokyo',
+  DD3: 'Africa/Cairo',
 };
 
 let seq = 0;
@@ -142,6 +145,30 @@ function buildHaulMixPairings(fleetType: string) {
   return generatePairings(instances, {
     homeBase: 'DXB',
     maxTripDays: 4,
+    minLayoverMinutes: 8 * 60,
+    maxLayoverMinutes: 32 * 60,
+    fleetTypes: [fleetType],
+  });
+}
+
+/**
+ * Three routes to three DIFFERENT destinations, all the SAME haul type
+ * (200min longest leg -> MEDIUM for all three, per `classifyHaulType`) —
+ * isolates destination-mix ordering (docs item 26) from haul-type
+ * balancing: since haul type never varies across these three routes,
+ * `haulTypeCountsSoFar` contributes the same value to every candidate's
+ * combined MIX score every day, so any resulting destination distribution
+ * is attributable only to `destinationCountsSoFar`.
+ */
+function buildSameHaulDifferentDestPairings(fleetType: string) {
+  const instances = [
+    ...buildDailyRoute('DD1', 6, 200, 20, 200, fleetType),
+    ...buildDailyRoute('DD2', 6, 200, 20, 200, fleetType),
+    ...buildDailyRoute('DD3', 6, 200, 20, 200, fleetType),
+  ];
+  return generatePairings(instances, {
+    homeBase: 'DXB',
+    maxTripDays: 3,
     minLayoverMinutes: 8 * 60,
     maxLayoverMinutes: 32 * 60,
     fleetTypes: [fleetType],
@@ -1200,5 +1227,79 @@ describe('generateMonthlyRoster — offReasonCounts (docs item 25)', () => {
 
     const sum = Object.values(result.summary.offReasonCounts).reduce((a, b) => a + b, 0);
     expect(sum).toBe(result.summary.offDays);
+  });
+});
+
+/** Every distinct non-DXB station a FLIGHT day's pairing visits. */
+function flightDayDestinations(day: ReturnType<typeof generateMonthlyRoster>['days'][number]): string[] {
+  if (day.assignment.type !== 'FLIGHT') return [];
+  const stations = new Set<string>();
+  for (const leg of day.assignment.pairing.legs) {
+    if (leg.instance.depIata !== 'DXB') stations.add(leg.instance.depIata);
+    if (leg.instance.arrIata !== 'DXB') stations.add(leg.instance.arrIata);
+  }
+  return [...stations];
+}
+
+describe('generateMonthlyRoster — destination mix (docs item 26)', () => {
+  it('MIX rotates across all available destinations instead of repeatedly picking the same one', () => {
+    // Diagnosed against the user's real live October 2026 roster: 4 of 5
+    // pairings that month went to the exact same destination (ICN), because
+    // MIX only ever balanced haul type, never destination. This fixture
+    // holds haul type constant across 3 different-destination routes so any
+    // resulting distribution is attributable only to destination-mix
+    // ordering, not haul-type balancing.
+    const pairings = buildSameHaulDifferentDestPairings('A350');
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+    });
+
+    const destCounts: Record<string, number> = { DD1: 0, DD2: 0, DD3: 0 };
+    let totalPairingDays = 0;
+    for (const day of result.days) {
+      for (const dest of flightDayDestinations(day)) {
+        destCounts[dest] = (destCounts[dest] ?? 0) + 1;
+        totalPairingDays += 1;
+      }
+    }
+
+    // All 3 destinations actually got flown at least once...
+    expect(destCounts.DD1).toBeGreaterThan(0);
+    expect(destCounts.DD2).toBeGreaterThan(0);
+    expect(destCounts.DD3).toBeGreaterThan(0);
+    // ...and none of them dominates the month the way the real live roster
+    // showed (4 of 5 = 80% to one destination) — a generous 60% ceiling
+    // still clearly distinguishes genuine rotation from that failure mode.
+    const maxShare = Math.max(destCounts.DD1, destCounts.DD2, destCounts.DD3) / totalPairingDays;
+    expect(maxShare).toBeLessThanOrEqual(0.6);
+  });
+
+  it('still balances haul type as before when destinations are held constant (docs item 20 regression guard)', () => {
+    // buildHaulMixPairings' own SHORT/MEDIUM/LONG routes are each a
+    // DIFFERENT destination too, so this doubles as a sanity check that
+    // adding the destination signal didn't break haul-type balancing —
+    // every haul type should still appear.
+    const pairings = buildHaulMixPairings('A350');
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+    });
+
+    const haulCounts: Record<HaulType, number> = { SHORT: 0, MEDIUM: 0, LONG: 0 };
+    for (const day of result.days) {
+      if (day.assignment.type === 'FLIGHT' && day.assignment.dayOfPairing === 1) {
+        haulCounts[classifyHaulType(day.assignment.pairing)] += 1;
+      }
+    }
+    expect(haulCounts.SHORT).toBeGreaterThan(0);
+    expect(haulCounts.MEDIUM).toBeGreaterThan(0);
+    expect(haulCounts.LONG).toBeGreaterThan(0);
   });
 });

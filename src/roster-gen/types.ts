@@ -21,10 +21,14 @@ import type { OperatorSpecificOverrides, RuleEvaluation } from '../ftl/types';
  * legality/pacing checks — they only differ in which already-eligible
  * candidate a day prefers:
  *
- *   MIX          — default. Prefers whichever haul type
- *                  (`haulType.ts#classifyHaulType`) is currently
- *                  least-represented among pairings assigned so far this
- *                  month.
+ *   MIX          — default. Prefers whichever candidate is currently
+ *                  LEAST-represented among pairings assigned so far this
+ *                  month, on BOTH the haul type
+ *                  (`haulType.ts#classifyHaulType`) AND the destination
+ *                  station axes at once — a combined co-equal score, not
+ *                  destination merely breaking haul-type ties (docs item
+ *                  26, `generateMonthlyRoster.ts`'s "DESTINATION MIX"
+ *                  module doc section).
  *   MAX_FLYING   — prefers the SMALLER block-time candidate, packing more
  *                  distinct flying days into the same budget.
  *   MAX_DAYS_OFF — prefers the BIGGER block-time candidate, reaching the

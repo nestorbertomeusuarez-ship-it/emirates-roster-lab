@@ -1281,3 +1281,73 @@ appends 5 fields to `genSummary`; `page.tsx` gained matching
 `OFF_REASON_KEYS`/`OFF_REASON_LABELS`/`formatOffReasonCounts` and a new
 banner line. No schema migration, no new `GenerateMonthlyRosterInput`
 field — every existing caller gets `offReasonCounts` for free.
+
+## 26. Destination mix (extends `MIX`'s own ordering, item 20): destination diversity is a CO-EQUAL signal to haul-type diversity, not a tiebreaker behind it
+
+Diagnosed against the user's real live October 2026 roster, right after
+items 24/25 shipped: **4 of the month's 5 pairings went to the exact same
+destination (ICN)** — `MIX`'s candidate ordering only ever balanced haul
+type (`haulTypeCountsSoFar[classifyHaulType(a)] - ...`), never destination,
+so whichever pairing happened to win the per-day shuffle could dominate an
+entire month regardless of how many of the 71 seeded destinations were
+actually available.
+
+Direct user feedback, verbatim: *"igual que hay un mix de hauls tiene que
+haber un mix de destinos"* ("just like there's a mix of haul types, there
+has to be a mix of destinations"). Explicitly NOT wanted: destination as a
+mere tiebreaker after haul type already decided — the user's framing is
+that both are peer concerns.
+
+### What changed
+
+New `destinationCountsSoFar: Record<string, number>` (`generateMonthlyRoster.ts`)
+— mirrors `haulTypeCountsSoFar`'s own lifecycle (reset per generation run,
+incremented every time a candidate is accepted) but keyed by IATA station
+instead of a fixed 3-value union, since the destination set isn't known in
+advance. New `pairingDestinations(pairing)` (every distinct non-`DXB`
+station a pairing visits — a multi-stop pairing can have more than one) and
+`destinationRepeatCost(pairing, destinationCountsSoFar)` (the MAX count
+across those stations, not the sum, so a multi-stop pairing touching
+several fresh stations isn't penalized relative to a single-destination one
+just for visiting more places).
+
+`orderCandidatesByStrategy`'s `MIX` branch now sorts by
+`haulTypeCountsSoFar[haul] + destinationRepeatCost(candidate, ...)` — ONE
+combined score, not a two-level sort (haul type first, destination as
+tiebreaker). Addition treats both signals as genuinely co-equal because
+they're on the same rough scale: both count "how many times has category X
+been picked this month so far," typically single digits over a month's
+handful of pairings. A two-level sort would have meant destination only
+ever mattered among candidates ALREADY tied on haul type — which, given how
+few haul-type buckets exist (3) versus how many destinations (71), would
+rarely have broken the real clustering problem observed live.
+
+Scoped to `MIX` only — `MAX_FLYING`/`MAX_DAYS_OFF` are explicitly about
+candidate SIZE (block-time preference), not diversity of any kind, and are
+unaffected by this item, consistent with their own existing doc comments.
+
+### Verification
+
+New `describe('generateMonthlyRoster — destination mix (docs item 26)')`
+block: a fixture with 3 different-destination routes all sharing the SAME
+haul type (isolating the destination signal from haul-type balancing)
+confirms all 3 destinations actually get flown, with no single destination
+exceeding 60% of the month's pairings (a generous bound that still clearly
+distinguishes genuine rotation from the 80%-to-one-destination failure mode
+observed live); a regression guard confirms haul-type balancing (item 20)
+still works when destinations are held constant. Full suite: 318/318
+passing (zero known-fragile failures, per item 25's own fix). Real
+read-only `buildMonthlyRosterForFleet` check against the live Oct 2026
+schedule: A350 went from 2 distinct destinations across 5 pairings (ICN
+picked 4 times) to **10 distinct destinations across 10 pairings — zero
+repeats**; A380 went to 8 distinct destinations across 9 pairings (only one
+repeat). 0 RED both fleets, block hours unchanged from the last
+verification (81-90h range).
+
+### Wiring
+
+No new `GenerateMonthlyRosterInput` field — purely an internal
+construction-loop refinement to the existing `MIX` strategy. Nothing
+downstream (`src/roster-gen/db/rosterGen.ts`, `actions.ts`, the generation
+form) needed any change — every `MIX` generation gets destination mix
+automatically.

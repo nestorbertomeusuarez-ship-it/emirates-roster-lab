@@ -62,11 +62,13 @@
  * Among the day's already-budget-filtered eligible candidates,
  * `input.generationStrategy` (default `'MIX'`) picks which one is tried
  * first (see `orderCandidatesByStrategy` and `GenerationStrategy`'s doc
- * comment in types.ts): `MIX` prefers the haul type
- * (`haulType.ts#classifyHaulType`) least-represented among pairings
- * assigned so far this month; `MAX_FLYING` prefers the smaller block-time
- * candidate (more distinct flying days for the same budget); `MAX_DAYS_OFF`
- * prefers the bigger block-time candidate (fewer trips, more days off).
+ * comment in types.ts): `MIX` prefers whichever candidate is least
+ * repeated so far this month on BOTH the haul type
+ * (`haulType.ts#classifyHaulType`) AND the destination station axes at
+ * once — see the "DESTINATION MIX" section below (docs item 26);
+ * `MAX_FLYING` prefers the smaller block-time candidate (more distinct
+ * flying days for the same budget); `MAX_DAYS_OFF` prefers the bigger
+ * block-time candidate (fewer trips, more days off).
  * This never changes (a)/(b)/(c) above — the budget filter and strategy
  * ordering only narrow/reorder which already-legal candidate is tried
  * first among the day's eligible options. See
@@ -258,6 +260,29 @@
  * the immediate post-generation summary UI (`actions.ts`'s `genSummary`) —
  * not a durable fact about the roster, so it is never written to
  * `RosterEntry` and never survives a page reload.
+ *
+ * DESTINATION MIX (docs/roster-gen-assumptions.md item 26): diagnosed
+ * against the user's real live October 2026 roster — 4 of 5 pairings that
+ * month went to the SAME destination (ICN), because `MIX`'s ordering only
+ * ever balanced haul type, never destination; a pairing that happened to
+ * win the per-day shuffle repeatedly could dominate the whole month
+ * regardless of how many other destinations were available. Direct user
+ * feedback: "igual que hay un mix de hauls tiene que haber un mix de
+ * destinos" — destination diversity should be pursued with the SAME
+ * mechanism as haul-type diversity, not subordinate to it.
+ * `destinationCountsSoFar` (keyed by IATA station, mirroring
+ * `haulTypeCountsSoFar`'s own lifecycle) tracks how many times each
+ * station has been flown so far this month; `destinationRepeatCost` reads
+ * the MAX count across a candidate's own visited stations
+ * (`pairingDestinations`) — max, not sum, so a multi-stop pairing touching
+ * several fresh stations isn't penalized relative to a single-destination
+ * one just for visiting more places. `orderCandidatesByStrategy`'s `MIX`
+ * branch sums this with the existing haul-type count as ONE combined sort
+ * key — both signals are on the same rough scale (both count "how many
+ * times has category X been picked this month so far"), so addition
+ * treats them as genuinely co-equal, never one merely breaking ties in the
+ * other. Scoped to `MIX` only — `MAX_FLYING`/`MAX_DAYS_OFF` are explicitly
+ * about candidate SIZE, not diversity, unaffected by this item.
  */
 
 import type { GeneratedPairing, PairingLegResult } from '../pairing/types';
@@ -653,6 +678,20 @@ function pairingBlockMinutes(pairing: GeneratedPairing): number {
   return pairing.legs.reduce((sum, leg) => sum + leg.instance.blockTimeMin, 0);
 }
 
+/**
+ * Every distinct non-`HOME_BASE_IATA` station a pairing visits (docs item
+ * 26) — for the common out-and-back shape this is a single station, but a
+ * multi-stop pairing can visit more than one.
+ */
+function pairingDestinations(pairing: GeneratedPairing): string[] {
+  const stations = new Set<string>();
+  for (const leg of pairing.legs) {
+    if (leg.instance.depIata !== HOME_BASE_IATA) stations.add(leg.instance.depIata);
+    if (leg.instance.arrIata !== HOME_BASE_IATA) stations.add(leg.instance.arrIata);
+  }
+  return [...stations];
+}
+
 function sumBlockMinutes(days: RosterGenDay[]): number {
   const seen = new Set<GeneratedPairing>();
   let total = 0;
@@ -766,10 +805,28 @@ function filterCandidatesWithinWeeklyBudget(
  * shuffled bucket array is looked up again if this date were ever
  * revisited.
  */
+/**
+ * How many times a candidate's own destination(s) have already been flown
+ * this month (docs item 26) — the MAX across every station the candidate
+ * visits (`pairingDestinations`), not the sum, so a multi-stop pairing
+ * isn't penalized relative to a single-destination one just for touching
+ * more stations. `destinationCountsSoFar` only ever has keys for stations
+ * actually flown so far — an unseen station reads as 0 via `?? 0`.
+ */
+function destinationRepeatCost(
+  pairing: GeneratedPairing,
+  destinationCountsSoFar: Record<string, number>
+): number {
+  const destinations = pairingDestinations(pairing);
+  if (destinations.length === 0) return 0;
+  return Math.max(...destinations.map((station) => destinationCountsSoFar[station] ?? 0));
+}
+
 function orderCandidatesByStrategy(
   candidates: GeneratedPairing[],
   strategy: GenerationStrategy,
-  haulTypeCountsSoFar: Record<HaulType, number>
+  haulTypeCountsSoFar: Record<HaulType, number>,
+  destinationCountsSoFar: Record<string, number>
 ): GeneratedPairing[] {
   if (strategy === 'MAX_FLYING') {
     return [...candidates].sort((a, b) => pairingBlockMinutes(a) - pairingBlockMinutes(b));
@@ -777,12 +834,20 @@ function orderCandidatesByStrategy(
   if (strategy === 'MAX_DAYS_OFF') {
     return [...candidates].sort((a, b) => pairingBlockMinutes(b) - pairingBlockMinutes(a));
   }
-  // MIX (default): prefer whichever haul type is currently
-  // least-represented among pairings assigned so far this month.
-  return [...candidates].sort(
-    (a, b) =>
-      haulTypeCountsSoFar[classifyHaulType(a)] - haulTypeCountsSoFar[classifyHaulType(b)]
-  );
+  // MIX (default, docs item 26): prefer whichever candidate is LEAST
+  // repeated so far this month on BOTH axes at once — haul type AND
+  // destination, added together as one combined score. Direct user
+  // feedback: "igual que hay un mix de hauls tiene que haber un mix de
+  // destinos" (just like there's a mix of haul types, there has to be a
+  // mix of destinations) — destination diversity is a co-equal signal,
+  // not a mere tiebreaker behind haul type.
+  return [...candidates].sort((a, b) => {
+    const costA =
+      haulTypeCountsSoFar[classifyHaulType(a)] + destinationRepeatCost(a, destinationCountsSoFar);
+    const costB =
+      haulTypeCountsSoFar[classifyHaulType(b)] + destinationRepeatCost(b, destinationCountsSoFar);
+    return costA - costB;
+  });
 }
 
 function countDistinctPairings(days: RosterGenDay[]): number {
@@ -879,6 +944,10 @@ export function generateMonthlyRoster(
   let daysOffSoFar = 0;
   let runningBlockMinutesSoFar = 0;
   const haulTypeCountsSoFar: Record<HaulType, number> = { SHORT: 0, MEDIUM: 0, LONG: 0 };
+  // Destination-mix tracking (docs item 26) — mirrors haulTypeCountsSoFar's
+  // own shape/lifecycle, but keyed by IATA station instead of a fixed
+  // 3-value union, since the destination set isn't known in advance.
+  const destinationCountsSoFar: Record<string, number> = {};
 
   const numSlices = numberOfWeekSlices(daysInMonth);
   const weeklyBlockSliceMinutes =
@@ -962,7 +1031,8 @@ export function generateMonthlyRoster(
       const orderedCandidates = orderCandidatesByStrategy(
         eligibleCandidates,
         generationStrategy,
-        haulTypeCountsSoFar
+        haulTypeCountsSoFar,
+        destinationCountsSoFar
       );
       for (const candidate of orderedCandidates) {
         if (dayIndex0 + candidate.tripDays > daysInMonth) continue; // wouldn't fit in the month
@@ -1002,6 +1072,9 @@ export function generateMonthlyRoster(
           runningBlockMinutesSoFar += pairingBlockMinutes(candidate);
           weeklyBlockMinutesSoFar += pairingBlockMinutes(candidate);
           haulTypeCountsSoFar[classifyHaulType(candidate)] += 1;
+          for (const station of pairingDestinations(candidate)) {
+            destinationCountsSoFar[station] = (destinationCountsSoFar[station] ?? 0) + 1;
+          }
           offStreakExtensionRemainingDays = 0; // flying resumed — any active streak ends
           break;
         }
