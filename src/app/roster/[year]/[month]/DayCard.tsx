@@ -161,6 +161,17 @@ function tripDayLabel(dayOfPairing: number | null, spansDays: number | null): st
   return `Day ${dayOfPairing}/${spansDays}`;
 }
 
+// Direct user feedback (2026-09-17): "en los dias que haya flight pon el
+// destino en la misma linea" — the destination used to only appear on the
+// separate FlightSummaryLine below the day/trip label. Extracts just the
+// day's final arrival station (the route's last leg, for a same-day
+// multi-leg transit day too) to append inline on the label line itself.
+function flightDestination(summary: FlightDaySummary | null): string {
+  if (!summary || summary.category !== 'FLIGHT') return '';
+  const legs = summary.route.split('→');
+  return legs[legs.length - 1] ?? '';
+}
+
 function summarizePairing(pairing: GeneratedPairing): string {
   const route = pairing.legs.map((leg) => leg.instance.depIata).concat(
     pairing.legs[pairing.legs.length - 1].instance.arrIata
@@ -346,10 +357,12 @@ export default function DayCard({
               className="rounded bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100 px-1 py-0.5 block underline"
             >
               {tripDayLabel(dayOfPairing, entry?.spansDays ?? null)}
+              {flightDestination(flightSummary) && ` → ${flightDestination(flightSummary)}`}
             </Link>
           ) : (
             <div className="rounded bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100 px-1 py-0.5">
               {tripDayLabel(dayOfPairing, entry?.spansDays ?? null)}
+              {flightDestination(flightSummary) && ` → ${flightDestination(flightSummary)}`}
             </div>
           )}
           {flightSummary && <FlightSummaryLine summary={flightSummary} />}
@@ -364,12 +377,18 @@ export default function DayCard({
               {entry.dutyType === 'FLIGHT'
                 ? tripDayLabel(dayOfPairing, entry.spansDays)
                 : entry.dutyType}
+              {entry.dutyType === 'FLIGHT' &&
+                flightDestination(flightSummary) &&
+                ` → ${flightDestination(flightSummary)}`}
             </Link>
           ) : (
             <div className="rounded bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 px-1 py-0.5">
               {entry.dutyType === 'FLIGHT'
                 ? tripDayLabel(dayOfPairing, entry.spansDays)
                 : entry.dutyType}
+              {entry.dutyType === 'FLIGHT' &&
+                flightDestination(flightSummary) &&
+                ` → ${flightDestination(flightSummary)}`}
             </div>
           )}
           {flightSummary && <FlightSummaryLine summary={flightSummary} />}

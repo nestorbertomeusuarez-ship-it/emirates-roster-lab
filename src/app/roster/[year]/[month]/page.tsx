@@ -212,67 +212,10 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
           </div>
         </div>
       </div>
-      <p className="text-xs text-zinc-400 mb-6">
-        {pairings.length} candidate pairing{pairings.length === 1 ? '' : 's'} generated
-        for this month (max {UI_PAIRING_CONSTRAINTS.maxTripDays} trip days,{' '}
-        {UI_PAIRING_CONSTRAINTS.minLayoverMinutes / 60}-{UI_PAIRING_CONSTRAINTS.maxLayoverMinutes / 60}h
-        layover window, same-fleet-type-per-pairing assumption — see
-        docs/pairing-assumptions.md).
-      </p>
 
-      {hasNoScheduleData && (
-        <div className="rounded border border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-100 px-3 py-2 mb-4 text-sm">
-          No flight schedule data exists for this month &mdash; the seeded schedule does not
-          cover {year}-{String(month).padStart(2, '0')}. There is nothing to generate pairings
-          from or evaluate for compliance here; this is different from a covered month with
-          nothing assigned yet.
-        </div>
-      )}
-
-      {/*
-        Responsive layout: below `md` there is no room for 7 fixed-width
-        columns (each holding a multi-row DayCard) — that renders but is
-        genuinely unusable at phone width, not just unpolished. Below `md`
-        the grid collapses to a single-column stacked "agenda" list (each
-        DayCard shows its own date/weekday inline, see DayCard.tsx), so the
-        weekday header row — which only makes sense as column labels — is
-        hidden entirely below `md`.
-      */}
-      <div className="hidden md:grid md:grid-cols-7 gap-2 mb-2">
-        {WEEKDAY_HEADERS.map((label) => (
-          <div key={label} className="text-xs font-medium text-zinc-500 text-center">
-            {label}
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-7 gap-2 mb-6">
-        {Array.from({ length: firstWeekdayIndex }).map((_, i) => (
-          // Week-alignment padding only means anything in the 7-column
-          // desktop grid; the mobile agenda list has no columns to align.
-          <div key={`pad-${i}`} className="hidden md:block" />
-        ))}
-        {cells.map((cell) => (
-          <DayCard
-            key={cell.date}
-            rosterMonthId={rosterMonth.id}
-            year={year}
-            month={month}
-            date={cell.date}
-            entry={cell.entry}
-            isPairingContinuation={cell.isPairingContinuation}
-            dayOfPairing={cell.dayOfPairing}
-            candidates={candidatesByStartDate.get(cell.date) ?? []}
-            category={dayCategoryByDate.get(cell.date) ?? null}
-            severity={worstSeverityByDate.get(cell.date) ?? null}
-            flightSummary={flightDaySummaryByDate.get(cell.date) ?? null}
-            isToday={isCurrentMonth && cell.date === todayIso}
-          />
-        ))}
-      </div>
-
-      <CompliancePanel evaluations={complianceEvaluations} />
-
+      {/* Moved above the calendar (direct user feedback, 2026-09-17):
+          generation is the primary "build my month" action, not a footnote
+          below the compliance panel. */}
       <section className="border rounded p-3 mb-6 text-xs">
         <h2 className="text-sm font-semibold mb-2">Automatic roster generation</h2>
         <p className="text-zinc-500 mb-2">
@@ -337,6 +280,67 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
           </button>
         </form>
       </section>
+
+      <p className="text-xs text-zinc-400 mb-6">
+        {pairings.length} candidate pairing{pairings.length === 1 ? '' : 's'} generated
+        for this month (max {UI_PAIRING_CONSTRAINTS.maxTripDays} trip days,{' '}
+        {UI_PAIRING_CONSTRAINTS.minLayoverMinutes / 60}-{UI_PAIRING_CONSTRAINTS.maxLayoverMinutes / 60}h
+        layover window, same-fleet-type-per-pairing assumption — see
+        docs/pairing-assumptions.md).
+      </p>
+
+      {hasNoScheduleData && (
+        <div className="rounded border border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-100 px-3 py-2 mb-4 text-sm">
+          No flight schedule data exists for this month &mdash; the seeded schedule does not
+          cover {year}-{String(month).padStart(2, '0')}. There is nothing to generate pairings
+          from or evaluate for compliance here; this is different from a covered month with
+          nothing assigned yet.
+        </div>
+      )}
+
+      {/*
+        Responsive layout: below `md` there is no room for 7 fixed-width
+        columns (each holding a multi-row DayCard) — that renders but is
+        genuinely unusable at phone width, not just unpolished. Below `md`
+        the grid collapses to a single-column stacked "agenda" list (each
+        DayCard shows its own date/weekday inline, see DayCard.tsx), so the
+        weekday header row — which only makes sense as column labels — is
+        hidden entirely below `md`.
+      */}
+      <div className="hidden md:grid md:grid-cols-7 gap-2 mb-2">
+        {WEEKDAY_HEADERS.map((label) => (
+          <div key={label} className="text-xs font-medium text-zinc-500 text-center">
+            {label}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-7 gap-2 mb-6">
+        {Array.from({ length: firstWeekdayIndex }).map((_, i) => (
+          // Week-alignment padding only means anything in the 7-column
+          // desktop grid; the mobile agenda list has no columns to align.
+          <div key={`pad-${i}`} className="hidden md:block" />
+        ))}
+        {cells.map((cell) => (
+          <DayCard
+            key={cell.date}
+            rosterMonthId={rosterMonth.id}
+            year={year}
+            month={month}
+            date={cell.date}
+            entry={cell.entry}
+            isPairingContinuation={cell.isPairingContinuation}
+            dayOfPairing={cell.dayOfPairing}
+            candidates={candidatesByStartDate.get(cell.date) ?? []}
+            category={dayCategoryByDate.get(cell.date) ?? null}
+            severity={worstSeverityByDate.get(cell.date) ?? null}
+            flightSummary={flightDaySummaryByDate.get(cell.date) ?? null}
+            isToday={isCurrentMonth && cell.date === todayIso}
+          />
+        ))}
+      </div>
+
+      <CompliancePanel evaluations={complianceEvaluations} />
     </main>
   );
 }
