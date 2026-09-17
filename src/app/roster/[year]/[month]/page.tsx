@@ -289,6 +289,16 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
               name="targetBlockHours"
               min="0"
               step="1"
+              // Direct user feedback (2026-09-17): "cuando genero nuevo
+              // roster vuelve a las 75hrs block" — the field had no
+              // persistent memory, so a plain re-generate (without
+              // retyping 85) silently reverted to the unbiased default.
+              // This app has exactly one user (see
+              // src/ftl/operatorConfig.ts's own precedent for a hardcoded
+              // single-user default over settings infrastructure) —
+              // defaulting to 85 here means every future generate keeps
+              // the block-hours floor unless explicitly cleared.
+              defaultValue={85}
               placeholder="e.g. 85"
               className="border rounded w-20"
             />
