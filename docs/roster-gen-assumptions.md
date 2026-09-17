@@ -724,6 +724,23 @@ min/max pattern exactly.
 
 ## 21. Weekly-block pacing (extends items 3 and 20): the construction loop paces in ~7-day slices, not just day-by-day
 
+**EXTENDED by item 22 — layer 2's own trigger (`forcedOffByWeeklyPacing`)
+was completely correct at fixing the giant-tail failure mode below, but
+turned out to be too mechanically rigid on its own.** Tested live and
+against a synthetic fixture isolating layer 2 specifically, it fires on
+exactly the same day every time a slice needs to catch up, and — because
+`weeklyStillNeededOff` and `remainingDaysInSlice` then decrease in lockstep
+every forced day — always runs for exactly `weeklyTargetOffDays` days, no
+more, no less. Diagnosed against the user's real live October 2026 roster a
+second time (`FFFFFOOFFFFOOFFFFFOOFFFFFFOOFFO`): every single OFF block is
+EXACTLY 2 days long. Direct user feedback in response: 2-4 days off between
+flying blocks is a normal AVERAGE, not something to enforce as a rule —
+item 22 adds seeded natural variation to WHEN and for how long this exact
+trigger fires, never touching layer 1, the month-level check, or any
+legality/cap check, all of which remain exactly as described below. This
+note is preserved per this doc's own update-don't-delete convention (see
+item #10's precedent) — the original text below is unchanged.
+
 Direct user feedback, verbatim (translated): *"The blocks of days off
 shouldn't be so concentrated, I don't like the day-by-day scheduling
 method, you have to think in weekly, monthly blocks."* Diagnosed root
@@ -878,3 +895,114 @@ internal construction-loop refinement, derived entirely from the existing
 `TARGET_DAYS_OFF_PER_MONTH` constant (layer 2). Nothing downstream
 (`src/roster-gen/db/rosterGen.ts`, `actions.ts`, the generation form) needed
 any change — every existing caller gets weekly pacing automatically.
+
+## 22. Natural OFF-block length/position variation (extends item 21's layer 2 only): a seeded, probabilistic soft nudge, never a min/max rule
+
+Direct user feedback, verbatim (translated): *"OFF blocks between 2 and 4
+days is the average, it's not necessary to have a hard rule for that, but
+it's something normal and likely."* Diagnosed root cause, isolated with a
+synthetic single-route fixture with no `targetBlockMinutesMax` set (so only
+layer 2 and the consecutive-duty soft cap can force an OFF day): item 21's
+layer 2 trigger, `weeklyStillNeededOff >= remainingDaysInSlice`, is a fixed
+point once true — both sides of the inequality decrement by exactly 1 every
+forced day, so the condition stays true, and therefore the streak's length,
+for exactly as many days as were still needed the moment it first fired.
+With `TARGET_DAYS_OFF_PER_MONTH = 8` over ~4-5 week slices,
+`weeklyTargetOffDays` rounds to almost exactly 2 for nearly every full
+7-day slice, so every layer-2-triggered block ends up mechanically,
+uniformly 2 days long — confirmed against the real live October 2026
+roster (see item 21's extension note above) and against a controlled
+synthetic fixture (a single dominant 2-day route, no block ceiling): two
+back-to-back OFF blocks, both exactly 2 days (days 5-6 and 12-13), before
+this item's fix.
+
+**The user was explicit that a hard min/max OFF-block-length rule (e.g.
+"reject any block outside 2-4 days") is NOT wanted** — that would be
+enforcing a number nobody asked for as a rule, the opposite of "normal and
+likely" framing. The fix instead makes the TRIGGER itself vary, using the
+existing seeded `mulberry32` PRNG mechanism this generator already uses for
+candidate-order shuffling (docs item 7) — never `Math.random()`, and never
+a `Math.random()`-style non-deterministic source — so a given
+fleet/year/month still reproduces byte-for-byte identically.
+
+### Two independent, additive knobs — both scoped strictly to layer 2's own trigger
+
+Both live in `generateMonthlyRoster.ts`, draw from a SEPARATE seeded stream
+(`weeklyPacingVariationRng`, seeded `${fleetType}|${year}|${month}|weekly-pacing-variation`,
+independent of the candidate-shuffle `rng` so neither concern perturbs the
+other's draw sequence), and are documented in full in the module's own
+"NATURAL OFF-BLOCK VARIATION" doc comment:
+
+1. **Trigger-window jitter** (`rollWeeklyPacingTriggerSlackDays`, rolled once
+   per week slice) — lets the trigger fire up to 2 days earlier than the
+   mathematically-latest-possible day in the slice (`sliceTriggerSlackDays`,
+   subtracted from `remainingDaysInSlice` in the trigger comparison). Varies
+   block POSITION. Requires an explicit `weeklyStillNeededOff > 0` guard:
+   without it, near a slice's own last 1-2 days the slacked comparison would
+   stay true even after the slice's target is already met (`remainingDaysInSlice
+   <= slack` regardless of `weeklyStillNeededOff`), forcing unneeded extra OFF
+   days — found and fixed during this item's own design derivation (see the
+   worked fixed-point math above), before it ever reached a written test.
+   Slack only ever pulls an ALREADY-still-needed trigger earlier — it can
+   never fire later than the original mechanical deadline, so the slice's own
+   days-off target is always still guaranteed to be met by slice end, exactly
+   as before this item.
+2. **Streak-length extension** (`rollOffStreakExtensionDays`, rolled once per
+   FRESH OFF streak that starts specifically because `forcedOffByWeeklyPacing`
+   was true that day) — a probabilistic 0-2 extra days beyond the trigger's own
+   mechanical minimum (45% none, 35% one extra day, 20% two extra days; ~0.75
+   day expected extra). Varies block LENGTH — jitter alone only ever varies
+   *when* the fixed-length streak starts, not its length, per the fixed-point
+   argument above. Combined with the ~2-day mechanical minimum, typical total
+   block length lands in the 2-4 day range described as normal, without a
+   hard cap: there is no `if (blockLength < 2 || blockLength > 4) reject`
+   anywhere in this file. **Deliberately scoped to weekly-pacing-triggered
+   streaks only** — never to a "no eligible candidate" OFF day caused by
+   layer 1's block-budget exhaustion or plain legality — so this can never
+   extend the OFF runs the item 21 "no giant end-of-month OFF tail" test
+   protects against; that test's fixture (a single dominant route pushed
+   against a hard month ceiling) exhausts its budget via layer 1, not layer
+   2, and was re-confirmed to still pass, unchanged, after this item.
+
+Both knobs only ever turn an already-OFF-eligible day OFF sooner, or keep an
+already-started weekly-pacing streak going one extra day — neither ever
+overrides `evaluateDuty()` legality (OFF is trivially always legal), the
+month-level hard `targetBlockMinutesMax` ceiling (extending OFF only reduces
+flying, never increases it), `CONSECUTIVE_DUTY_DAYS_SOFT_CAP` (unaffected —
+only FLIGHT days count toward it), or the month-level
+`TARGET_DAYS_OFF_PER_MONTH`/`PACING_CHECK_FROM_DAY` floor (more OFF days can
+only help reach a floor sooner, never prevent it).
+
+### Verification
+
+`generateMonthlyRoster.test.ts` gained a new describe block
+(`generateMonthlyRoster — natural OFF-block length variation`): a variation
+test using a synthetic single-2-day-route fixture with no block ceiling,
+restricted to the first 17 days (strictly before `PACING_CHECK_FROM_DAY`
+can ever fire) so any OFF block found is attributable only to layer 2 or
+the consecutive-duty cap — confirmed pre-fix RED (both blocks found were
+uniformly 2 days, `distinctLengths.size === 1`), confirmed post-fix GREEN
+(distinct lengths across the same two blocks); a re-run of the existing
+"no giant end-of-month OFF tail" fixture/assertions, confirming the new
+knobs never regress that fix (longest run stays `<= 7`, unchanged before
+and after this item); and a determinism test building one pairings pool
+and calling `generateMonthlyRoster` twice with the identical input,
+asserting byte-for-byte identical `days`/`summary`/`evaluations` output.
+All 6 pre-existing weekly-pacing tests from item 21 (and every other
+pre-existing test in the file) continued to pass unmodified — none of them
+asserted an exact day-by-day pattern or exact block length, only aggregate
+properties (zero RED, the 7-consecutive-duty-day cap, the `>=7`-days-off
+floor, "every week slice has at least one OFF day," "spreads across at
+least 3 week slices," "longest run `<= 7`") that natural variation does not
+disturb.
+
+### Wiring
+
+No new `GenerateMonthlyRosterInput` field was needed — purely an internal
+construction-loop refinement to layer 2, using two new module-level
+constants (`WEEKLY_PACING_TRIGGER_SLACK_MAX_DAYS = 2`,
+`OFF_STREAK_EXTENSION_MAX_DAYS = 2`) and one new seeded PRNG stream. Nothing
+downstream (`src/roster-gen/db/rosterGen.ts`, `actions.ts`, the generation
+form) needed any change — every existing caller gets the natural variation
+automatically, with no new opt-out: per the user's own framing ("normal and
+likely," not a rule to toggle), this is not gated behind a new input field.

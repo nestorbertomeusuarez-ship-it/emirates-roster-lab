@@ -109,6 +109,63 @@
  * turn an illegal candidate legal, and they stack with (never replace) every
  * check above: a day goes OFF if ANY forcing condition or empty-eligible-set
  * condition says so.
+ *
+ * NATURAL OFF-BLOCK VARIATION (docs/roster-gen-assumptions.md item 22,
+ * extending item 21's layer 2 only): layer 2 above, as originally built, is
+ * a purely deterministic "fire on exactly this day" trigger, which turned
+ * out to produce mechanically-uniform OFF blocks — every block exactly
+ * `weeklyTargetOffDays` long, every time (diagnosed against the user's real
+ * live October 2026 roster: `FFFFFOOFFFFOOFFFFFOOFFFFFFOOFFO`, EVERY OFF
+ * block exactly 2 days). Direct user feedback: 2-4 days off between flying
+ * blocks is normal as an AVERAGE, not something to enforce as a rule — the
+ * fix is to make the trigger itself vary, using the existing seeded
+ * `mulberry32` PRNG mechanism (never `Math.random()`), never a hard
+ * min/max block-length check. Two independent, additive knobs, both scoped
+ * STRICTLY to layer 2's own trigger (`forcedOffByWeeklyPacing` below) —
+ * neither ever touches layer 1 (`filterCandidatesWithinWeeklyBudget`,
+ * unchanged), the month-level `PACING_CHECK_FROM_DAY` check,
+ * `CONSECUTIVE_DUTY_DAYS_SOFT_CAP`, or any `evaluateDuty()` legality
+ * screen — both only ever turn an already-OFF-eligible day OFF sooner, or
+ * keep an already-started weekly-pacing OFF streak going one extra day,
+ * never the reverse:
+ *
+ *   1. TRIGGER-WINDOW JITTER (`rollWeeklyPacingTriggerSlackDays`) — rolled
+ *      ONCE per week slice, this lets the weekly pacing trigger fire up to
+ *      `WEEKLY_PACING_TRIGGER_SLACK_MAX_DAYS` days earlier than the
+ *      mathematically-latest-possible day within the slice, varying block
+ *      POSITION. The `weeklyStillNeededOff > 0` guard is required: without
+ *      it, near a slice's own last `slack` days the slacked comparison
+ *      would fire even after the slice's target is already met, forcing
+ *      unneeded extra OFF days — the guard makes slack only ever pull a
+ *      genuinely still-needed trigger earlier, never invent a new one.
+ *   2. STREAK-LENGTH EXTENSION (`rollOffStreakExtensionDays`) — rolled once
+ *      whenever a fresh OFF streak actually STARTS because of the weekly
+ *      pacing trigger specifically (never for a layer-1/legality/
+ *      consecutive-cap-caused "no eligible candidate" OFF day, and never
+ *      re-rolled while a streak is already running), this gives a
+ *      probabilistic chance of continuing that streak
+ *      `OFF_STREAK_EXTENSION_MAX_DAYS` extra days beyond the mechanical
+ *      minimum the trigger alone would produce, varying block LENGTH
+ *      (jitter alone only varies block position, not length — once the
+ *      trigger fires, `weeklyStillNeededOff` and `remainingDaysInSlice`
+ *      decrease in lockstep every forced day, so the streak's own length is
+ *      fixed by how much was still needed at the moment it fired,
+ *      independent of when that moment was). Combined with the ~2-day
+ *      mechanical minimum this generator's own constants tend to produce,
+ *      typical total block length lands in the 2-4 day range the user
+ *      described as normal — without ever hard-rejecting a shorter or
+ *      longer block if that is what the actual legal/budget situation
+ *      produces; there is no `if (blockLength < 2 || blockLength > 4)
+ *      reject` anywhere in this file, deliberately.
+ *
+ * Both draw from a SEPARATE seeded `mulberry32` stream
+ * (`weeklyPacingVariationRng`, seeded from
+ * `${fleetType}|${year}|${month}|weekly-pacing-variation`) rather than
+ * reusing the candidate-shuffle `rng` above, so the two concerns stay
+ * decoupled — adding/removing one never perturbs the other's draw
+ * sequence — while both remain fully deterministic and reproducible for a
+ * given fleet/year/month, per this generator's existing seeding discipline
+ * (docs/roster-gen-assumptions.md item 7).
  */
 
 import type { GeneratedPairing, PairingLegResult } from '../pairing/types';
@@ -148,6 +205,10 @@ const WEEK_SLICE_LENGTH_DAYS = 7;
  * whole-budget-in-2-weeks failure mode.
  */
 const WEEKLY_BLOCK_TOLERANCE_FRACTION = 0.5;
+/** See the module doc comment's "NATURAL OFF-BLOCK VARIATION" section (docs item 22) — max days the weekly-pacing trigger window may fire early. */
+const WEEKLY_PACING_TRIGGER_SLACK_MAX_DAYS = 2;
+/** See the module doc comment's "NATURAL OFF-BLOCK VARIATION" section (docs item 22) — max extra days a weekly-pacing-triggered OFF streak may continue beyond its mechanical minimum. */
+const OFF_STREAK_EXTENSION_MAX_DAYS = 2;
 
 function isoDate(year: number, month: number, day: number): string {
   return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10);
@@ -183,6 +244,36 @@ function shuffleInPlace<T>(arr: T[], rng: () => number): void {
     const j = Math.floor(rng() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
+}
+
+/**
+ * Rolls one week slice's weekly-pacing trigger-window slack (0-2 days) —
+ * see the module doc comment's "NATURAL OFF-BLOCK VARIATION" section (docs
+ * item 22). Weighted toward 0/1 so most slices still trigger close to the
+ * mechanical deadline, with a genuine chance of firing up to
+ * `WEEKLY_PACING_TRIGGER_SLACK_MAX_DAYS` days earlier.
+ */
+function rollWeeklyPacingTriggerSlackDays(rng: () => number): number {
+  const r = rng();
+  if (r < 0.4) return 0;
+  if (r < 0.75) return 1;
+  return WEEKLY_PACING_TRIGGER_SLACK_MAX_DAYS;
+}
+
+/**
+ * Rolls how many EXTRA days (0-2) a weekly-pacing-triggered OFF streak
+ * continues beyond its mechanical minimum — see the module doc comment's
+ * "NATURAL OFF-BLOCK VARIATION" section (docs item 22). 45% no extension
+ * (the mechanical block stands as-is), 35% one extra day, 20% two extra
+ * days — an expected extra of ~0.75 day stacked on top of whatever the
+ * trigger's own mechanical minimum was, landing typical total block length
+ * in the 2-4 day range without ever hard-capping it.
+ */
+function rollOffStreakExtensionDays(rng: () => number): number {
+  const r = rng();
+  if (r < 0.45) return 0;
+  if (r < 0.8) return 1;
+  return OFF_STREAK_EXTENSION_MAX_DAYS;
 }
 
 function countConsecutiveDutyDaysAtEnd(days: RosterGenDay[]): number {
@@ -545,6 +636,13 @@ export function generateMonthlyRoster(
   for (const bucket of candidatesByStart.values()) {
     shuffleInPlace(bucket, rng);
   }
+  // Separate seeded stream for the weekly-pacing natural-variation knobs
+  // (docs item 22) — kept independent of `rng` above so adding/removing
+  // either concern never perturbs the other's draw sequence, while both
+  // stay fully deterministic per fleet/year/month.
+  const weeklyPacingVariationRng = mulberry32(
+    hashSeed(`${fleetType}|${year}|${month}|weekly-pacing-variation`)
+  );
 
   const days: RosterGenDay[] = [];
   let dayIndex0 = 0; // 0-based cursor
@@ -558,23 +656,39 @@ export function generateMonthlyRoster(
   let currentWeekSliceStart0 = -1; // sentinel — forces a reset on the first iteration
   let weeklyBlockMinutesSoFar = 0;
   let weeklyOffDaysSoFar = 0;
+  // Natural OFF-block variation state (docs item 22) — see the module doc
+  // comment's "NATURAL OFF-BLOCK VARIATION" section. `sliceTriggerSlackDays`
+  // is re-rolled once per week slice; `offStreakExtensionRemainingDays` is
+  // rolled once per fresh weekly-pacing-triggered OFF streak and decremented
+  // while it runs.
+  let sliceTriggerSlackDays = 0;
+  let offStreakExtensionRemainingDays = 0;
 
   while (dayIndex0 < daysInMonth) {
     const date = dates[dayIndex0];
     const consecutiveDutyDaysBefore = countConsecutiveDutyDaysAtEnd(days);
     const remainingDaysInMonth = daysInMonth - dayIndex0;
+    const priorDayType = days.length > 0 ? days[days.length - 1].assignment.type : null;
+    const isFreshOffStreakStart = priorDayType !== 'FLIGHT';
 
     const { start0: sliceStart0, end0: sliceEnd0 } = weekSliceBoundsForDay(dayIndex0, daysInMonth);
     if (sliceStart0 !== currentWeekSliceStart0) {
       currentWeekSliceStart0 = sliceStart0;
       weeklyBlockMinutesSoFar = 0;
       weeklyOffDaysSoFar = 0;
+      sliceTriggerSlackDays = rollWeeklyPacingTriggerSlackDays(weeklyPacingVariationRng);
     }
     const sliceLengthDays = sliceEnd0 - sliceStart0 + 1;
     const remainingDaysInSlice = sliceEnd0 - dayIndex0 + 1;
     const weeklyTargetOffDays = targetOffDaysForWeekSlice(sliceLengthDays, daysInMonth);
     const weeklyStillNeededOff = Math.max(0, weeklyTargetOffDays - weeklyOffDaysSoFar);
-    const forcedOffByWeeklyPacing = weeklyStillNeededOff >= remainingDaysInSlice;
+    // Slack only ever pulls an ALREADY-still-needed trigger earlier
+    // (`weeklyStillNeededOff > 0` guard) — see the module doc comment for
+    // why this guard is required (docs item 22).
+    const forcedOffByWeeklyPacing =
+      weeklyStillNeededOff > 0 &&
+      weeklyStillNeededOff >= remainingDaysInSlice - sliceTriggerSlackDays;
+    const forcedOffByStreakExtension = offStreakExtensionRemainingDays > 0;
 
     const stillNeeded = Math.max(0, TARGET_DAYS_OFF_PER_MONTH - daysOffSoFar);
     const forcedOffByPacing =
@@ -584,7 +698,12 @@ export function generateMonthlyRoster(
 
     let assignedPairing: GeneratedPairing | null = null;
 
-    if (!forcedOffByPacing && !forcedOffByConsecutiveCap && !forcedOffByWeeklyPacing) {
+    if (
+      !forcedOffByPacing &&
+      !forcedOffByConsecutiveCap &&
+      !forcedOffByWeeklyPacing &&
+      !forcedOffByStreakExtension
+    ) {
       const candidates = candidatesByStart.get(date) ?? [];
       const monthBudgetFiltered = filterCandidatesWithinBudget(
         candidates,
@@ -634,6 +753,7 @@ export function generateMonthlyRoster(
           runningBlockMinutesSoFar += pairingBlockMinutes(candidate);
           weeklyBlockMinutesSoFar += pairingBlockMinutes(candidate);
           haulTypeCountsSoFar[classifyHaulType(candidate)] += 1;
+          offStreakExtensionRemainingDays = 0; // flying resumed — any active streak ends
           break;
         }
       }
@@ -644,6 +764,20 @@ export function generateMonthlyRoster(
       daysOffSoFar += 1;
       weeklyOffDaysSoFar += 1;
       dayIndex0 += 1;
+
+      // Natural OFF-block variation (docs item 22) — see the module doc
+      // comment. Only a FRESH streak caused specifically by the weekly
+      // pacing trigger gets a length-extension roll; a streak already in
+      // progress just decrements, and a streak caused by anything else
+      // (month-level pacing, the consecutive-duty cap, or budget/legality
+      // exhaustion) is left completely alone.
+      if (isFreshOffStreakStart) {
+        offStreakExtensionRemainingDays = forcedOffByWeeklyPacing
+          ? rollOffStreakExtensionDays(weeklyPacingVariationRng)
+          : 0;
+      } else if (offStreakExtensionRemainingDays > 0) {
+        offStreakExtensionRemainingDays -= 1;
+      }
     }
   }
 

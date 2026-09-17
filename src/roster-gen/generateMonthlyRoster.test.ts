@@ -107,6 +107,26 @@ function buildSingleRoutePairings(fleetType: string) {
 }
 
 /**
+ * A single dominant 2-day route, available almost every day, no smaller
+ * legal alternative — isolates the weekly days-off pacing trigger (layer 2)
+ * plus the consecutive-duty soft cap as the only possible OFF-day causes
+ * (no `targetBlockMinutesMax` means layer 1's weekly block-budget filter
+ * never runs). Used specifically to test docs item 22's natural OFF-block
+ * length variation against the exact mechanism that was diagnosed as
+ * producing uniform 2-day blocks.
+ */
+function buildDailyTwoDayRoutePairings(fleetType: string) {
+  const instances = buildDailyRoute('BBB', 6, 420, 20, 420, fleetType);
+  return generatePairings(instances, {
+    homeBase: 'DXB',
+    maxTripDays: 3,
+    minLayoverMinutes: 8 * 60,
+    maxLayoverMinutes: 32 * 60,
+    fleetTypes: [fleetType],
+  });
+}
+
+/**
  * Three routes, one per haul type (classified by `classifyHaulType`'s
  * longest-leg rule): SSS's 100min legs are SHORT (<180), MMM's 250min legs
  * are MEDIUM (180-360), LLL's 500min legs are LONG (>360) — all three start
@@ -523,6 +543,22 @@ function longestConsecutiveOffRun(days: ReturnType<typeof generateMonthlyRoster>
   return maxRun;
 }
 
+/** Lengths of every complete consecutive-OFF run in `days`, in order. */
+function offBlockLengths(days: ReturnType<typeof generateMonthlyRoster>['days']): number[] {
+  const lengths: number[] = [];
+  let run = 0;
+  for (const day of days) {
+    if (day.assignment.type === 'OFF') {
+      run += 1;
+    } else if (run > 0) {
+      lengths.push(run);
+      run = 0;
+    }
+  }
+  if (run > 0) lengths.push(run);
+  return lengths;
+}
+
 describe('generateMonthlyRoster — weekly block-budget pacing (docs item 21)', () => {
   it('spreads block-minute acceptance across more weeks instead of front-loading the whole budget into the first 2 weeks', () => {
     // Single 1000-block-min/3-day route, available almost every day, no
@@ -639,4 +675,84 @@ describe('generateMonthlyRoster — weekly pacing preserves existing invariants'
       expect(offCount).toBeGreaterThanOrEqual(7);
     }
   );
+});
+
+describe('generateMonthlyRoster — natural OFF-block length variation (docs item 22)', () => {
+  // Single dominant 2-day route, no targetBlockMinutesMax — isolates the
+  // weekly days-off pacing trigger (layer 2) as the only mechanical OFF-day
+  // cause in this window (no budget filter active, no month-level pacing
+  // yet — PACING_CHECK_FROM_DAY=24 hasn't engaged by day 17). Before this
+  // item's fix, this exact fixture/seed produced two back-to-back,
+  // mechanically-identical 2-day OFF blocks (days 5-6 and 12-13) — the
+  // precise uniformity the user flagged from the real live roster
+  // (`FFFFFOOFFFFOOFFFFFOOFFFFFFOOFFO`, every block exactly 2 days).
+  it('does not force every weekly-pacing-triggered OFF block to the exact same mechanical length', () => {
+    const pairings = buildDailyTwoDayRoutePairings('A350');
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+    });
+
+    // Restricted to the first 17 days, strictly before PACING_CHECK_FROM_DAY
+    // (24) can ever fire, so both OFF blocks found here are attributable
+    // only to the weekly pacing trigger (or the consecutive-duty soft cap),
+    // never the month-level tail-avoidance check.
+    const earlyWindow = result.days.slice(0, 17);
+    const lengths = offBlockLengths(earlyWindow);
+
+    expect(lengths.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(lengths).size).toBeGreaterThanOrEqual(2);
+  });
+
+  it('still keeps the longest consecutive OFF run well below the 10-day tail this generator must never reintroduce', () => {
+    // Same single-route/90h-ceiling fixture as the existing "no giant
+    // end-of-month OFF tail" acceptance test above — confirms the new
+    // variation knobs (scoped strictly to the weekly-pacing trigger) never
+    // regress that fix, even though they add MORE opportunities for an OFF
+    // streak to run a little longer than its mechanical minimum.
+    const pairings = buildSingleRoutePairings('A350');
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+      targetBlockMinutesMax: 90 * 60,
+    });
+
+    expect(longestConsecutiveOffRun(result.days)).toBeLessThanOrEqual(7);
+    const reds = result.evaluations.filter((e) => e.evaluation.severity === 'RED');
+    expect(reds).toEqual([]);
+    assertNeverExceedsSevenConsecutiveDutyDays(result.days);
+  });
+
+  it('is deterministic — identical fleet/year/month inputs produce byte-for-byte identical output across repeated runs', () => {
+    // Reuses the SAME pairings array for both calls (rather than building it
+    // twice) — this test file's shared `seq` counter (used to generate
+    // unique flight numbers across the whole suite) would otherwise make
+    // two independently-built candidate pools differ in their instance
+    // `number` fields alone, which is a fixture-construction artifact, not
+    // a real generator non-determinism. `generateMonthlyRoster` never
+    // mutates its `pairings` input, so reuse across calls is safe (the same
+    // pattern the pre-existing "both undefined" and "defaults to MIX" tests
+    // above already rely on).
+    const pairings = buildDailyTwoDayRoutePairings('A350');
+    const input = {
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+    };
+
+    const first = generateMonthlyRoster(input);
+    const second = generateMonthlyRoster(input);
+
+    expect(second.days).toEqual(first.days);
+    expect(second.summary).toEqual(first.summary);
+    expect(second.evaluations).toEqual(first.evaluations);
+  });
 });
