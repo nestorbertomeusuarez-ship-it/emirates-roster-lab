@@ -42,6 +42,15 @@
  * `RuleEvaluation`s when the *real* `evaluateDuty()` is run against every
  * day it would occupy (FDP-table, minimum rest, and the cumulative
  * block/duty-hour ceilings). If no candidate fits, the day is OFF.
+ *
+ * OPTIONAL BLOCK-HOURS-FLOOR BIAS: when `input.targetBlockMinutes` is set
+ * and the running total block minutes assigned so far is still below it, a
+ * day's fitting candidates are tried in descending block-time order
+ * instead of the deterministic-shuffle order above, so the month
+ * accumulates block hours faster while under target. This never changes
+ * (a)/(b)/(c) above — it only reorders which already-legal candidate is
+ * tried first among the day's fitting options. See
+ * docs/roster-gen-assumptions.md item 19.
  * `consecutiveDutyDays >= 6` pre-emptively forces an OFF day (margin below
  * the legal 7-day ceiling), and from day 24 onward an OFF day is forced
  * whenever the days-off pace could not otherwise reach the
@@ -293,16 +302,42 @@ export function evaluateRosterDays(
   return results;
 }
 
+/** Total block minutes across every leg of one pairing. */
+function pairingBlockMinutes(pairing: GeneratedPairing): number {
+  return pairing.legs.reduce((sum, leg) => sum + leg.instance.blockTimeMin, 0);
+}
+
 function sumBlockMinutes(days: RosterGenDay[]): number {
   const seen = new Set<GeneratedPairing>();
   let total = 0;
   for (const day of days) {
     if (day.assignment.type === 'FLIGHT' && !seen.has(day.assignment.pairing)) {
       seen.add(day.assignment.pairing);
-      total += day.assignment.pairing.legs.reduce((sum, leg) => sum + leg.instance.blockTimeMin, 0);
+      total += pairingBlockMinutes(day.assignment.pairing);
     }
   }
   return total;
+}
+
+/**
+ * Orders one day's candidate pairings for the construction loop below. When
+ * `targetBlockMinutes` is set and `runningBlockMinutesSoFar` is still below
+ * it, returns a NEW array sorted by descending block time (Array#sort is
+ * stable, so candidates with equal block time keep their existing
+ * deterministic-shuffle relative order — route variety among ties is
+ * unaffected). Otherwise returns `candidates` unchanged (existing
+ * behavior). Never mutates `candidates` itself, since the same shuffled
+ * bucket array is looked up again if this date were ever revisited.
+ */
+function orderCandidatesForSelection(
+  candidates: GeneratedPairing[],
+  runningBlockMinutesSoFar: number,
+  targetBlockMinutes: number | undefined
+): GeneratedPairing[] {
+  if (targetBlockMinutes == null || runningBlockMinutesSoFar >= targetBlockMinutes) {
+    return candidates;
+  }
+  return [...candidates].sort((a, b) => pairingBlockMinutes(b) - pairingBlockMinutes(a));
 }
 
 function countDistinctPairings(days: RosterGenDay[]): number {
@@ -321,7 +356,8 @@ function countDistinctPairings(days: RosterGenDay[]): number {
 export function generateMonthlyRoster(
   input: GenerateMonthlyRosterInput
 ): MonthlyRosterGenerationResult {
-  const { fleetType, year, month, pairings, airportTimeZones, operatorConfig } = input;
+  const { fleetType, year, month, pairings, airportTimeZones, operatorConfig, targetBlockMinutes } =
+    input;
 
   const daysInMonth = daysInMonthOf(year, month);
   const dates = Array.from({ length: daysInMonth }, (_, i) => isoDate(year, month, i + 1));
@@ -341,6 +377,7 @@ export function generateMonthlyRoster(
   const days: RosterGenDay[] = [];
   let dayIndex0 = 0; // 0-based cursor
   let daysOffSoFar = 0;
+  let runningBlockMinutesSoFar = 0;
 
   while (dayIndex0 < daysInMonth) {
     const date = dates[dayIndex0];
@@ -357,7 +394,12 @@ export function generateMonthlyRoster(
 
     if (!forcedOffByPacing && !forcedOffByConsecutiveCap) {
       const candidates = candidatesByStart.get(date) ?? [];
-      for (const candidate of candidates) {
+      const orderedCandidates = orderCandidatesForSelection(
+        candidates,
+        runningBlockMinutesSoFar,
+        targetBlockMinutes
+      );
+      for (const candidate of orderedCandidates) {
         if (dayIndex0 + candidate.tripDays > daysInMonth) continue; // wouldn't fit in the month
         if (consecutiveDutyDaysBefore + candidate.tripDays > MAX_CONSECUTIVE_DUTY_DAYS) continue;
 
@@ -373,6 +415,7 @@ export function generateMonthlyRoster(
           assignedPairing = candidate;
           days.push(...candidateDays);
           dayIndex0 += candidate.tripDays;
+          runningBlockMinutesSoFar += pairingBlockMinutes(candidate);
           break;
         }
       }

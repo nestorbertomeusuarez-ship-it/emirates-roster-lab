@@ -62,6 +62,22 @@ export interface GenerateMonthlyRosterInput {
    * `src/ftl/operatorConfig.ts` for this app's actual single-user config.
    */
   operatorConfig?: OperatorSpecificOverrides;
+  /**
+   * Optional soft floor, in minutes, the generator tries to accumulate
+   * block time toward (see docs/roster-gen-assumptions.md item 19). While
+   * the running total is below this value, candidate pairings on a given
+   * day are tried in descending block-time order instead of the existing
+   * deterministic-shuffle order; once the running total reaches/exceeds
+   * this value, ordering reverts to the existing shuffle. This never
+   * relaxes any legality check, the consecutive-duty-day cap, or the
+   * days-off pacing — it only reorders which already-legal candidate is
+   * tried first. `undefined` (or `0`) behaves exactly as before this field
+   * existed. The month can legitimately undershoot this value if there
+   * isn't enough legal flying capacity — this is a soft bias, not a
+   * guarantee, and `summary.totalBlockMinutes` reports whatever was
+   * actually achieved.
+   */
+  targetBlockMinutes?: number;
 }
 
 export interface MonthlyRosterGenerationResult {

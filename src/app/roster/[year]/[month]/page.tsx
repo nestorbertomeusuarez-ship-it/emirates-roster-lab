@@ -53,7 +53,12 @@ function formatMinutes(minutes: number): string {
 
 interface RosterMonthPageProps {
   params: Promise<{ year: string; month: string }>;
-  searchParams: Promise<{ genConfirm?: string; genExisting?: string; genSummary?: string }>;
+  searchParams: Promise<{
+    genConfirm?: string;
+    genExisting?: string;
+    genSummary?: string;
+    targetBlockHours?: string;
+  }>;
 }
 
 interface GenerationSummary {
@@ -99,6 +104,10 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
   const genSummary = parseGenSummary(sp.genSummary);
   const genConfirmFleet = sp.genConfirm;
   const genExistingCount = sp.genExisting ? Number(sp.genExisting) : 0;
+  // Carried through the confirm-before-overwrite redirect exactly like
+  // genConfirm/genExisting (see actions.ts#generateRosterAction) so a
+  // confirmed overwrite doesn't lose the chosen target block hours.
+  const genConfirmTargetBlockHours = sp.targetBlockHours ?? '';
 
   const rosterMonth = await getOrCreateRosterMonth(prisma, year, month);
   const entries = await listRosterEntries(prisma, rosterMonth.id);
@@ -255,6 +264,7 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
             <input type="hidden" name="month" value={month} />
             <input type="hidden" name="fleetType" value={genConfirmFleet} />
             <input type="hidden" name="confirm" value="true" />
+            <input type="hidden" name="targetBlockHours" value={genConfirmTargetBlockHours} />
             <button type="submit" className="border rounded px-2 py-0.5 bg-red-600 text-white">
               Generate anyway (overwrite)
             </button>
@@ -271,6 +281,17 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
               <option value="A350">A350</option>
               <option value="A380">A380</option>
             </select>
+          </label>
+          <label className="flex items-center gap-1">
+            Target block hours (optional):
+            <input
+              type="number"
+              name="targetBlockHours"
+              min="0"
+              step="1"
+              placeholder="e.g. 85"
+              className="border rounded w-20"
+            />
           </label>
           <button
             type="submit"

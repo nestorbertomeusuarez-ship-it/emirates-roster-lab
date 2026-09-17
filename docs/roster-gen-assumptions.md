@@ -448,3 +448,55 @@ No open item's real-world impact was assessed further than what the review
 already established (see the review's own scenario: ULR augmented crew,
 short-report-time duty, 3h rest taken, previously approved a 15h duty the
 formula only justified to 11.5h) — this fix directly closes that gap.
+
+## 19. Optional block-hours-floor bias — a soft candidate-ordering preference, never a legality relaxation
+
+Direct user request this session: push a real generated roster toward a
+target monthly block-hour figure (e.g. 85h, a standard real-world minimum
+guaranteed block-hour threshold in airline pay structures), without ever
+relaxing GCAA legality or the days-off pacing heuristics (#3 above).
+
+`GenerateMonthlyRosterInput.targetBlockMinutes` (`src/roster-gen/types.ts`)
+is optional and, when set, changes ONLY which already-legal candidate
+`generateMonthlyRoster.ts`'s construction loop tries first on a given day —
+never whether a day gets a duty at all beyond what was already legal, and
+never any legal threshold. Concretely: while the running total block
+minutes assigned so far is below `targetBlockMinutes`, a day's fitting
+candidate pairings are sorted by descending total block time
+(`orderCandidatesForSelection`) instead of using the existing
+deterministic-shuffle order (#7 above); once the running total
+reaches/exceeds the target, ordering reverts to the existing shuffle
+exactly as before this field existed. `Array#sort` is stable, so candidates
+tied on block time keep their shuffled relative order — route variety among
+ties is unaffected.
+
+This bias sits entirely downstream of every existing constraint, never
+upstream of it: the candidate still has to pass `dayIndex0 +
+candidate.tripDays > daysInMonth`, the `MAX_CONSECUTIVE_DUTY_DAYS` check,
+`CONSECUTIVE_DUTY_DAYS_SOFT_CAP`/`TARGET_DAYS_OFF_PER_MONTH`/
+`PACING_CHECK_FROM_DAY` pacing, and the real `evaluateDuty()` zero-RED
+screen exactly as before — those remain fully authoritative and are
+evaluated identically regardless of `targetBlockMinutes`. This is a
+reordering of "which legal candidate is tried first," never a relaxation
+of what counts as legal.
+
+**Soft floor, not a guarantee.** If the month's legal flying capacity
+(given the candidate pool, the 7-consecutive-duty-day ceiling, and the
+days-off floor) simply cannot reach `targetBlockMinutes`, generation still
+completes normally — `summary.totalBlockMinutes` just reports whatever was
+actually achieved, under target. No hard failure/error is raised for
+undershooting; this mirrors every other constant in this file (#3 above) in
+being this generator's own scheduling heuristic, not a new GCAA number.
+
+**Wiring.** Threaded from `GenerateMonthlyRosterInput.targetBlockMinutes`
+through `generateMonthlyRoster` (optional, `undefined` = unchanged prior
+behavior) into `src/roster-gen/db/rosterGen.ts#buildMonthlyRosterForFleet`
+(new optional parameter) into
+`src/app/roster/[year]/[month]/actions.ts#generateRosterAction` (reads an
+optional `targetBlockHours` form field, in whole/fractional HOURS for the
+human, converted to minutes) into the generation form and its
+confirm-before-overwrite re-POST in
+`src/app/roster/[year]/[month]/page.tsx` (a plain `<input type="number">`
+next to the fleet `<select>`, carried through the `genConfirm`/`genExisting`
+redirect exactly like `fleetType` already is, so a confirmed overwrite
+doesn't lose the chosen value).

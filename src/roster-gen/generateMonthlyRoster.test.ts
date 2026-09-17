@@ -214,6 +214,91 @@ describe('generateMonthlyRoster — operatorConfig threading', () => {
   });
 });
 
+describe('generateMonthlyRoster — targetBlockMinutes bias', () => {
+  const pairings = buildFixturePairings('A350');
+  const baseInput = {
+    fleetType: 'A350',
+    year: YEAR,
+    month: MONTH,
+    pairings,
+    airportTimeZones: AIRPORT_TZS,
+  };
+
+  // Route block minutes as built by buildFixturePairings: AAA=240+240=480,
+  // BBB=420+420=840, CCC=500+500=1000 — all three routes start on (almost)
+  // every day of the fixture month, so day 1 has three legal candidates of
+  // three distinct block-time totals to choose among.
+  const MAX_ROUTE_BLOCK_MINUTES = 1000; // CCC
+
+  function firstFlightDayPairingBlockMinutes(days: ReturnType<typeof generateMonthlyRoster>['days']): number | null {
+    const first = days[0];
+    if (first.assignment.type !== 'FLIGHT') return null;
+    return first.assignment.pairing.legs.reduce((sum, leg) => sum + leg.instance.blockTimeMin, 0);
+  }
+
+  it('prefers the higher-block-time legal candidate over the deterministic-shuffle order while under target', () => {
+    const biased = generateMonthlyRoster({ ...baseInput, targetBlockMinutes: 999_999 });
+    const biasedFirstDayBlock = firstFlightDayPairingBlockMinutes(biased.days);
+
+    // Under an effectively-unreachable target, day 1 (no rest-check history
+    // yet, per item #6) should pick the highest-block-time legal candidate
+    // available that day: the CCC route.
+    expect(biasedFirstDayBlock).toBe(MAX_ROUTE_BLOCK_MINUTES);
+
+    const unbiased = generateMonthlyRoster(baseInput);
+    const unbiasedFirstDayBlock = firstFlightDayPairingBlockMinutes(unbiased.days);
+    expect(biasedFirstDayBlock).toBeGreaterThanOrEqual(unbiasedFirstDayBlock ?? 0);
+  });
+
+  it('stops mattering once the target is already met — targetBlockMinutes: 0 matches the unbiased run exactly', () => {
+    const unbiased = generateMonthlyRoster(baseInput);
+    const metFromTheStart = generateMonthlyRoster({ ...baseInput, targetBlockMinutes: 0 });
+
+    expect(metFromTheStart.days).toEqual(unbiased.days);
+    expect(metFromTheStart.summary).toEqual(unbiased.summary);
+  });
+
+  it('never relaxes legality: zero RED evaluations even while the bias is active all month', () => {
+    const biased = generateMonthlyRoster({ ...baseInput, targetBlockMinutes: 999_999 });
+    const reds = biased.evaluations.filter((e) => e.evaluation.severity === 'RED');
+    expect(reds).toEqual([]);
+  });
+
+  it('never exceeds 7 consecutive duty days or drops below the days-off floor while biased', () => {
+    const biased = generateMonthlyRoster({ ...baseInput, targetBlockMinutes: 999_999 });
+
+    let run = 0;
+    let maxRun = 0;
+    for (const day of biased.days) {
+      if (day.assignment.type === 'FLIGHT') {
+        run += 1;
+        maxRun = Math.max(maxRun, run);
+      } else {
+        run = 0;
+      }
+    }
+    expect(maxRun).toBeLessThanOrEqual(7);
+
+    const offCount = biased.days.filter((d) => d.assignment.type === 'OFF').length;
+    expect(offCount).toBeGreaterThanOrEqual(7);
+  });
+
+  it('reports whatever total was actually achieved without erroring when the target is unreachable', () => {
+    // No candidates at all -> impossible to reach any positive target;
+    // generation must still complete normally, reporting 0 achieved.
+    const result = generateMonthlyRoster({
+      fleetType: 'A380',
+      year: YEAR,
+      month: MONTH,
+      pairings: [],
+      airportTimeZones: AIRPORT_TZS,
+      targetBlockMinutes: 999_999,
+    });
+    expect(result.summary.totalBlockMinutes).toBe(0);
+    expect(result.days.every((d) => d.assignment.type === 'OFF')).toBe(true);
+  });
+});
+
 describe('generateMonthlyRoster — no candidates available', () => {
   it('assigns OFF to every day when the pairing pool is empty', () => {
     const result = generateMonthlyRoster({

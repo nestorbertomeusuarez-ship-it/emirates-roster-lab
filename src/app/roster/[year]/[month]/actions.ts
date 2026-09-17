@@ -43,6 +43,25 @@ function requireString(formData: FormData, key: string): string {
   return value;
 }
 
+/**
+ * Reads the optional "target block hours" number input (see page.tsx's
+ * generation form) and converts it to minutes for
+ * `buildMonthlyRosterForFleet`/`generateMonthlyRoster`'s soft block-hours
+ * bias (docs/roster-gen-assumptions.md item 19). Blank/absent -> `undefined`
+ * (unchanged prior behavior, no bias). A present-but-invalid value fails
+ * fast rather than silently ignoring what the user typed.
+ */
+function parseOptionalTargetBlockMinutes(formData: FormData): number | undefined {
+  const raw = formData.get('targetBlockHours');
+  if (typeof raw !== 'string' || raw.trim().length === 0) return undefined;
+
+  const hours = Number(raw);
+  if (!Number.isFinite(hours) || hours < 0) {
+    throw new Error(`Invalid "targetBlockHours" value: "${raw}"`);
+  }
+  return Math.round(hours * 60);
+}
+
 export async function assignSimpleDutyAction(formData: FormData): Promise<void> {
   const rosterMonthId = requireString(formData, 'rosterMonthId');
   const dateStr = requireString(formData, 'date');
@@ -104,17 +123,31 @@ export async function generateRosterAction(formData: FormData): Promise<void> {
   const month = Number(requireString(formData, 'month'));
   const fleetType = requireString(formData, 'fleetType');
   const confirmed = formData.get('confirm') === 'true';
+  const targetBlockMinutes = parseOptionalTargetBlockMinutes(formData);
 
   const rosterMonth = await getOrCreateRosterMonth(prisma, year, month);
   const existingCount = await countExistingRosterEntries(prisma, rosterMonth.id);
 
   if (existingCount > 0 && !confirmed) {
+    // Carries the chosen target block hours through the confirm-before-
+    // overwrite redirect the exact same way fleetType already is, so a
+    // confirmed overwrite doesn't lose it (see page.tsx's confirm form).
+    const targetBlockHoursParam =
+      targetBlockMinutes != null
+        ? `&targetBlockHours=${encodeURIComponent(String(targetBlockMinutes / 60))}`
+        : '';
     redirect(
-      `/roster/${year}/${month}?genConfirm=${encodeURIComponent(fleetType)}&genExisting=${existingCount}`
+      `/roster/${year}/${month}?genConfirm=${encodeURIComponent(fleetType)}&genExisting=${existingCount}${targetBlockHoursParam}`
     );
   }
 
-  const result = await buildMonthlyRosterForFleet(prisma, year, month, fleetType);
+  const result = await buildMonthlyRosterForFleet(
+    prisma,
+    year,
+    month,
+    fleetType,
+    targetBlockMinutes
+  );
   await persistGeneratedRoster(prisma, rosterMonth.id, result);
 
   const redCount = result.evaluations.filter((e) => e.evaluation.severity === 'RED').length;
