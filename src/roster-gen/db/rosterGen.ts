@@ -33,17 +33,18 @@ export const ROSTER_GEN_PAIRING_CONSTRAINTS = {
  * ensures/reads flight instances + candidate pairings for the month, reads
  * every known airport's timezone, and runs the pure generator.
  *
- * `targetBlockMinutes` is optional and threaded straight through to
- * `generateMonthlyRoster`'s soft block-hours-floor bias (see
- * docs/roster-gen-assumptions.md item 19) — `undefined` behaves exactly as
- * before this parameter existed.
+ * `targetBlockMinutesMin`/`targetBlockMinutesMax` are optional and threaded
+ * straight through to `generateMonthlyRoster`'s soft block-hours target
+ * range bias (see docs/roster-gen-assumptions.md item 19) — both
+ * `undefined` behaves exactly as before these parameters existed.
  */
 export async function buildMonthlyRosterForFleet(
   prisma: PrismaClient,
   year: number,
   month: number,
   fleetType: string,
-  targetBlockMinutes?: number
+  targetBlockMinutesMin?: number,
+  targetBlockMinutesMax?: number
 ): Promise<MonthlyRosterGenerationResult> {
   const pairings = await generatePairingsForMonth(prisma, year, month, {
     ...ROSTER_GEN_PAIRING_CONSTRAINTS,
@@ -61,7 +62,8 @@ export async function buildMonthlyRosterForFleet(
     // This app has exactly one user — see src/ftl/operatorConfig.ts for why
     // a hardcoded constant (not a settings UI) is the correct wiring here.
     operatorConfig: EMIRATES_OPERATOR_CONFIG,
-    targetBlockMinutes,
+    targetBlockMinutesMin,
+    targetBlockMinutesMax,
   });
 }
 

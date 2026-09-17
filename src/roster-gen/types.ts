@@ -63,21 +63,47 @@ export interface GenerateMonthlyRosterInput {
    */
   operatorConfig?: OperatorSpecificOverrides;
   /**
-   * Optional soft floor, in minutes, the generator tries to accumulate
-   * block time toward (see docs/roster-gen-assumptions.md item 19). While
-   * the running total is below this value, candidate pairings on a given
-   * day are tried in descending block-time order instead of the existing
-   * deterministic-shuffle order; once the running total reaches/exceeds
-   * this value, ordering reverts to the existing shuffle. This never
-   * relaxes any legality check, the consecutive-duty-day cap, or the
-   * days-off pacing — it only reorders which already-legal candidate is
-   * tried first. `undefined` (or `0`) behaves exactly as before this field
-   * existed. The month can legitimately undershoot this value if there
-   * isn't enough legal flying capacity — this is a soft bias, not a
-   * guarantee, and `summary.totalBlockMinutes` reports whatever was
-   * actually achieved.
+   * Optional soft target RANGE, in minutes, the generator tries to steer
+   * the month's accumulated block time into (see
+   * docs/roster-gen-assumptions.md item 19, superseded/refined for the
+   * range semantics). Both bounds are independently optional:
+   *
+   * - While the running total is BELOW `targetBlockMinutesMin`: a day's
+   *   fitting candidates are tried in descending block-time order (prefer
+   *   bigger) — fills toward the floor faster. Identical to the original
+   *   single-floor behavior.
+   * - Once the running total is AT OR ABOVE `targetBlockMinutesMin`
+   *   (whether still inside `[min, max]` or already past
+   *   `targetBlockMinutesMax` from a single day's jump): a day's fitting
+   *   candidates are tried in ASCENDING block-time order (prefer smaller)
+   *   — keeps an in-band roster from needlessly jumping back out the top,
+   *   and minimizes further overshoot once already past `max` (a greedy
+   *   day-by-day walk can't undo a prior day's pick, so the best it can do
+   *   going forward is stop making things worse).
+   * - `targetBlockMinutesMin` set, `targetBlockMinutesMax` unset: behaves
+   *   exactly like the original open floor — descending while below min,
+   *   reverts to the unbiased deterministic-shuffle order once at/above
+   *   min (no ceiling to steer away from).
+   * - `targetBlockMinutesMax` set, `targetBlockMinutesMin` unset: no floor
+   *   phase to fill toward first, so candidates are always tried in
+   *   ascending block-time order from day 1 — minimizes how far a single
+   *   day's jump can overshoot the cap.
+   * - Both `undefined`: behavior is byte-for-byte identical to no bias at
+   *   all (matches the original `targetBlockMinutes` unset case).
+   *
+   * This never relaxes any legality check, the consecutive-duty-day cap,
+   * or the days-off pacing — it only reorders which already-legal
+   * candidate is tried first. It cannot guarantee landing inside
+   * `[targetBlockMinutesMin, targetBlockMinutesMax]`: a single available
+   * pairing might be large enough to jump past `targetBlockMinutesMax` from
+   * below `targetBlockMinutesMin` in one day, or the month's legal flying
+   * capacity might not reach `targetBlockMinutesMin` at all — this is a
+   * soft bias, not a guarantee, and `summary.totalBlockMinutes` reports
+   * whatever was actually achieved.
    */
-  targetBlockMinutes?: number;
+  targetBlockMinutesMin?: number;
+  /** See `targetBlockMinutesMin`'s doc comment — the paired optional ceiling. */
+  targetBlockMinutesMax?: number;
 }
 
 export interface MonthlyRosterGenerationResult {

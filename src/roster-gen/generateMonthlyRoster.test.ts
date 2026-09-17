@@ -214,7 +214,7 @@ describe('generateMonthlyRoster — operatorConfig threading', () => {
   });
 });
 
-describe('generateMonthlyRoster — targetBlockMinutes bias', () => {
+describe('generateMonthlyRoster — targetBlockMinutesMin/Max range bias', () => {
   const pairings = buildFixturePairings('A350');
   const baseInput = {
     fleetType: 'A350',
@@ -226,8 +226,14 @@ describe('generateMonthlyRoster — targetBlockMinutes bias', () => {
 
   // Route block minutes as built by buildFixturePairings: AAA=240+240=480,
   // BBB=420+420=840, CCC=500+500=1000 — all three routes start on (almost)
-  // every day of the fixture month, so day 1 has three legal candidates of
-  // three distinct block-time totals to choose among.
+  // every day of the fixture month. On day 1 specifically, AAA's quick-turn
+  // candidate is legally screened out by the real evaluateDuty() (its
+  // report-to-report FDP span exceeds the Table A max for a 2-sector duty,
+  // even though its own block time is the smallest of the three) — so the
+  // smallest LEGAL day-1 candidate is BBB, not AAA. This is exactly why the
+  // bias only reorders among already-legal candidates: illegal ones are
+  // never reachable regardless of sort direction.
+  const MIN_LEGAL_DAY1_BLOCK_MINUTES = 840; // BBB (AAA is illegal on day 1 — see above)
   const MAX_ROUTE_BLOCK_MINUTES = 1000; // CCC
 
   function firstFlightDayPairingBlockMinutes(days: ReturnType<typeof generateMonthlyRoster>['days']): number | null {
@@ -236,11 +242,15 @@ describe('generateMonthlyRoster — targetBlockMinutes bias', () => {
     return first.assignment.pairing.legs.reduce((sum, leg) => sum + leg.instance.blockTimeMin, 0);
   }
 
-  it('prefers the higher-block-time legal candidate over the deterministic-shuffle order while under target', () => {
-    const biased = generateMonthlyRoster({ ...baseInput, targetBlockMinutes: 999_999 });
+  it('prefers the higher-block-time legal candidate over the deterministic-shuffle order while below the floor', () => {
+    const biased = generateMonthlyRoster({
+      ...baseInput,
+      targetBlockMinutesMin: 999_999,
+      targetBlockMinutesMax: 1_999_999,
+    });
     const biasedFirstDayBlock = firstFlightDayPairingBlockMinutes(biased.days);
 
-    // Under an effectively-unreachable target, day 1 (no rest-check history
+    // Under an effectively-unreachable floor, day 1 (no rest-check history
     // yet, per item #6) should pick the highest-block-time legal candidate
     // available that day: the CCC route.
     expect(biasedFirstDayBlock).toBe(MAX_ROUTE_BLOCK_MINUTES);
@@ -250,22 +260,67 @@ describe('generateMonthlyRoster — targetBlockMinutes bias', () => {
     expect(biasedFirstDayBlock).toBeGreaterThanOrEqual(unbiasedFirstDayBlock ?? 0);
   });
 
-  it('stops mattering once the target is already met — targetBlockMinutes: 0 matches the unbiased run exactly', () => {
-    const unbiased = generateMonthlyRoster(baseInput);
-    const metFromTheStart = generateMonthlyRoster({ ...baseInput, targetBlockMinutes: 0 });
-
-    expect(metFromTheStart.days).toEqual(unbiased.days);
-    expect(metFromTheStart.summary).toEqual(unbiased.summary);
+  it('prefers the lower-block-time legal candidate once the running total is at/above the floor', () => {
+    // Floor of 0 is "already met" from day 1, so day 1 should pick the
+    // LOWEST-block-time LEGAL candidate available that day: BBB (AAA's
+    // smaller block time is illegal on day 1 — see the constant's comment).
+    const biased = generateMonthlyRoster({
+      ...baseInput,
+      targetBlockMinutesMin: 0,
+      targetBlockMinutesMax: 1_999_999,
+    });
+    const biasedFirstDayBlock = firstFlightDayPairingBlockMinutes(biased.days);
+    expect(biasedFirstDayBlock).toBe(MIN_LEGAL_DAY1_BLOCK_MINUTES);
   });
 
-  it('never relaxes legality: zero RED evaluations even while the bias is active all month', () => {
-    const biased = generateMonthlyRoster({ ...baseInput, targetBlockMinutes: 999_999 });
+  it('both undefined matches the unbiased run exactly (byte-for-byte, no bias at all)', () => {
+    const unbiased = generateMonthlyRoster(baseInput);
+    const explicit = generateMonthlyRoster({
+      ...baseInput,
+      targetBlockMinutesMin: undefined,
+      targetBlockMinutesMax: undefined,
+    });
+
+    expect(explicit.days).toEqual(unbiased.days);
+    expect(explicit.summary).toEqual(unbiased.summary);
+  });
+
+  it('min-only degrades to the original open-floor behavior: reverts to unbiased ordering once at/above min', () => {
+    // Floor already met from day 0 (min: 0), no max configured -> no
+    // further bias at all, identical to the fully-unbiased run.
+    const unbiased = generateMonthlyRoster(baseInput);
+    const minOnlyMet = generateMonthlyRoster({ ...baseInput, targetBlockMinutesMin: 0 });
+
+    expect(minOnlyMet.days).toEqual(unbiased.days);
+    expect(minOnlyMet.summary).toEqual(unbiased.summary);
+
+    // Still-below-min, min-only behaves like the original open floor:
+    // prefer bigger.
+    const minOnlyBelow = generateMonthlyRoster({ ...baseInput, targetBlockMinutesMin: 999_999 });
+    expect(firstFlightDayPairingBlockMinutes(minOnlyBelow.days)).toBe(MAX_ROUTE_BLOCK_MINUTES);
+  });
+
+  it('max-only degrades to always preferring the smaller candidate from day 1 (no floor phase)', () => {
+    const maxOnly = generateMonthlyRoster({ ...baseInput, targetBlockMinutesMax: 1_999_999 });
+    expect(firstFlightDayPairingBlockMinutes(maxOnly.days)).toBe(MIN_LEGAL_DAY1_BLOCK_MINUTES);
+  });
+
+  it('never relaxes legality: zero RED evaluations even while the range bias is active all month', () => {
+    const biased = generateMonthlyRoster({
+      ...baseInput,
+      targetBlockMinutesMin: 999_999,
+      targetBlockMinutesMax: 1_999_999,
+    });
     const reds = biased.evaluations.filter((e) => e.evaluation.severity === 'RED');
     expect(reds).toEqual([]);
   });
 
-  it('never exceeds 7 consecutive duty days or drops below the days-off floor while biased', () => {
-    const biased = generateMonthlyRoster({ ...baseInput, targetBlockMinutes: 999_999 });
+  it('never exceeds 7 consecutive duty days or drops below the days-off floor while range-biased', () => {
+    const biased = generateMonthlyRoster({
+      ...baseInput,
+      targetBlockMinutesMin: 999_999,
+      targetBlockMinutesMax: 1_999_999,
+    });
 
     let run = 0;
     let maxRun = 0;
@@ -283,8 +338,8 @@ describe('generateMonthlyRoster — targetBlockMinutes bias', () => {
     expect(offCount).toBeGreaterThanOrEqual(7);
   });
 
-  it('reports whatever total was actually achieved without erroring when the target is unreachable', () => {
-    // No candidates at all -> impossible to reach any positive target;
+  it('reports whatever total was actually achieved without erroring when the floor is unreachable', () => {
+    // No candidates at all -> impossible to reach any positive floor;
     // generation must still complete normally, reporting 0 achieved.
     const result = generateMonthlyRoster({
       fleetType: 'A380',
@@ -292,7 +347,8 @@ describe('generateMonthlyRoster — targetBlockMinutes bias', () => {
       month: MONTH,
       pairings: [],
       airportTimeZones: AIRPORT_TZS,
-      targetBlockMinutes: 999_999,
+      targetBlockMinutesMin: 999_999,
+      targetBlockMinutesMax: 1_999_999,
     });
     expect(result.summary.totalBlockMinutes).toBe(0);
     expect(result.days.every((d) => d.assignment.type === 'OFF')).toBe(true);

@@ -57,7 +57,8 @@ interface RosterMonthPageProps {
     genConfirm?: string;
     genExisting?: string;
     genSummary?: string;
-    targetBlockHours?: string;
+    targetBlockHoursMin?: string;
+    targetBlockHoursMax?: string;
   }>;
 }
 
@@ -106,8 +107,9 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
   const genExistingCount = sp.genExisting ? Number(sp.genExisting) : 0;
   // Carried through the confirm-before-overwrite redirect exactly like
   // genConfirm/genExisting (see actions.ts#generateRosterAction) so a
-  // confirmed overwrite doesn't lose the chosen target block hours.
-  const genConfirmTargetBlockHours = sp.targetBlockHours ?? '';
+  // confirmed overwrite doesn't lose the chosen target block hours range.
+  const genConfirmTargetBlockHoursMin = sp.targetBlockHoursMin ?? '';
+  const genConfirmTargetBlockHoursMax = sp.targetBlockHoursMax ?? '';
 
   const rosterMonth = await getOrCreateRosterMonth(prisma, year, month);
   const entries = await listRosterEntries(prisma, rosterMonth.id);
@@ -264,7 +266,8 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
             <input type="hidden" name="month" value={month} />
             <input type="hidden" name="fleetType" value={genConfirmFleet} />
             <input type="hidden" name="confirm" value="true" />
-            <input type="hidden" name="targetBlockHours" value={genConfirmTargetBlockHours} />
+            <input type="hidden" name="targetBlockHoursMin" value={genConfirmTargetBlockHoursMin} />
+            <input type="hidden" name="targetBlockHoursMax" value={genConfirmTargetBlockHoursMax} />
             <button type="submit" className="border rounded px-2 py-0.5 bg-red-600 text-white">
               Generate anyway (overwrite)
             </button>
@@ -286,21 +289,34 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
             Target block hours (optional):
             <input
               type="number"
-              name="targetBlockHours"
+              name="targetBlockHoursMin"
               min="0"
               step="1"
               // Direct user feedback (2026-09-17): "cuando genero nuevo
               // roster vuelve a las 75hrs block" — the field had no
               // persistent memory, so a plain re-generate (without
-              // retyping 85) silently reverted to the unbiased default.
-              // This app has exactly one user (see
-              // src/ftl/operatorConfig.ts's own precedent for a hardcoded
-              // single-user default over settings infrastructure) —
-              // defaulting to 85 here means every future generate keeps
-              // the block-hours floor unless explicitly cleared.
-              defaultValue={85}
-              placeholder="e.g. 85"
-              className="border rounded w-20"
+              // retyping) silently reverted to the unbiased default. This
+              // app has exactly one user (see src/ftl/operatorConfig.ts's
+              // own precedent for a hardcoded single-user default over
+              // settings infrastructure) — defaulting to 80-90 here means
+              // every future generate keeps this target range unless
+              // explicitly cleared. Refined the same day (still direct user
+              // feedback) from a single open floor (defaultValue 85) to an
+              // explicit min/max range after the floor overshot to 106h40m
+              // in one real run — see docs/roster-gen-assumptions.md item 19.
+              defaultValue={80}
+              placeholder="e.g. 80"
+              className="border rounded w-16"
+            />
+            to
+            <input
+              type="number"
+              name="targetBlockHoursMax"
+              min="0"
+              step="1"
+              defaultValue={90}
+              placeholder="e.g. 90"
+              className="border rounded w-16"
             />
           </label>
           <button

@@ -449,26 +449,53 @@ already established (see the review's own scenario: ULR augmented crew,
 short-report-time duty, 3h rest taken, previously approved a 15h duty the
 formula only justified to 11.5h) — this fix directly closes that gap.
 
-## 19. Optional block-hours-floor bias — a soft candidate-ordering preference, never a legality relaxation
+## 19. Optional block-hours TARGET RANGE bias — a soft candidate-ordering preference, never a legality relaxation
 
-Direct user request this session: push a real generated roster toward a
-target monthly block-hour figure (e.g. 85h, a standard real-world minimum
-guaranteed block-hour threshold in airline pay structures), without ever
-relaxing GCAA legality or the days-off pacing heuristics (#3 above).
+**SUPERSEDED (same session) — refined from a single open floor to an
+explicit min/max range.** The original version of this item (preserved
+below) added a single `targetBlockMinutes` soft floor: while under target,
+prefer bigger candidates; once at/above it, no bias at all. Tested live
+against the user's real October 2026 roster via `generateRosterAction` with
+`targetBlockHours=85`, it overshot to 106h40m — an open floor has no
+ceiling, so once a single day's pick pushed the running total past 85h, the
+"under target" condition simply stopped firing and the bias went inert
+rather than steering back down. Direct user feedback in response ("keep it
+as an open floor, or add a ceiling near 85?"): **"80-90"** — an explicit
+range, not an open-ended floor. This entry is kept for history per this
+doc's own update-don't-delete convention (see item #10's precedent) rather
+than silently rewritten.
 
-`GenerateMonthlyRosterInput.targetBlockMinutes` (`src/roster-gen/types.ts`)
-is optional and, when set, changes ONLY which already-legal candidate
+**Current behavior.** `GenerateMonthlyRosterInput.targetBlockMinutesMin`
+and `targetBlockMinutesMax` (`src/roster-gen/types.ts`) replace the single
+`targetBlockMinutes` field with two independently-optional bounds. Both,
+when set, change ONLY which already-legal candidate
 `generateMonthlyRoster.ts`'s construction loop tries first on a given day —
 never whether a day gets a duty at all beyond what was already legal, and
-never any legal threshold. Concretely: while the running total block
-minutes assigned so far is below `targetBlockMinutes`, a day's fitting
-candidate pairings are sorted by descending total block time
-(`orderCandidatesForSelection`) instead of using the existing
-deterministic-shuffle order (#7 above); once the running total
-reaches/exceeds the target, ordering reverts to the existing shuffle
-exactly as before this field existed. `Array#sort` is stable, so candidates
-tied on block time keep their shuffled relative order — route variety among
-ties is unaffected.
+never any legal threshold:
+
+- **Below `targetBlockMinutesMin`:** a day's fitting candidates are sorted
+  by DESCENDING block time (prefer bigger) — identical to the original
+  single-floor behavior, fills toward the floor faster.
+- **At or above `targetBlockMinutesMin`** (whether still inside
+  `[min, max]` or already past `targetBlockMinutesMax` from a single day's
+  jump): sorted by ASCENDING block time (prefer smaller) instead — this is
+  the actual fix for the overshoot case reported above. It keeps an
+  in-band roster from needlessly jumping back out the top, and once a
+  single day's jump has already pushed the total past `max`, it minimizes
+  further overshoot on every subsequent day: a greedy day-by-day walk can
+  never undo a prior day's pick, so the best it can do going forward is
+  stop making things worse.
+- **`targetBlockMinutesMin` set, `targetBlockMinutesMax` unset:** degrades
+  to the original open-floor behavior exactly — no bias at all once the
+  floor is met (there's no ceiling to steer away from).
+- **`targetBlockMinutesMax` set, `targetBlockMinutesMin` unset:** no floor
+  phase to fill toward first, so candidates are always tried smallest-first
+  from day 1 — minimizes how far a single day's jump can overshoot the cap.
+- **Both unset:** behavior is byte-for-byte identical to no bias at all.
+
+`Array#sort` is stable in every branch, so candidates tied on block time
+keep their shuffled relative order — route variety among ties is
+unaffected (#7 above).
 
 This bias sits entirely downstream of every existing constraint, never
 upstream of it: the candidate still has to pass `dayIndex0 +
@@ -476,27 +503,64 @@ candidate.tripDays > daysInMonth`, the `MAX_CONSECUTIVE_DUTY_DAYS` check,
 `CONSECUTIVE_DUTY_DAYS_SOFT_CAP`/`TARGET_DAYS_OFF_PER_MONTH`/
 `PACING_CHECK_FROM_DAY` pacing, and the real `evaluateDuty()` zero-RED
 screen exactly as before — those remain fully authoritative and are
-evaluated identically regardless of `targetBlockMinutes`. This is a
-reordering of "which legal candidate is tried first," never a relaxation
-of what counts as legal.
+evaluated identically regardless of the target range. This is a reordering
+of "which legal candidate is tried first," never a relaxation of what
+counts as legal.
 
-**Soft floor, not a guarantee.** If the month's legal flying capacity
-(given the candidate pool, the 7-consecutive-duty-day ceiling, and the
-days-off floor) simply cannot reach `targetBlockMinutes`, generation still
-completes normally — `summary.totalBlockMinutes` just reports whatever was
-actually achieved, under target. No hard failure/error is raised for
-undershooting; this mirrors every other constant in this file (#3 above) in
-being this generator's own scheduling heuristic, not a new GCAA number.
+**Soft range, not a guarantee.** This still cannot guarantee landing inside
+`[targetBlockMinutesMin, targetBlockMinutesMax]`: a single available
+pairing might be large enough to jump straight past `targetBlockMinutesMax`
+from below `targetBlockMinutesMin` in one day (there is no smaller legal
+candidate available that day to land inside the band with), or the month's
+legal flying capacity might not reach `targetBlockMinutesMin` at all.
+Generation still completes normally either way — `summary.totalBlockMinutes`
+reports whatever was actually achieved. No hard failure/error is raised for
+missing the range; this mirrors every other constant in this file (#3
+above) in being this generator's own scheduling heuristic, not a new GCAA
+number.
 
-**Wiring.** Threaded from `GenerateMonthlyRosterInput.targetBlockMinutes`
-through `generateMonthlyRoster` (optional, `undefined` = unchanged prior
-behavior) into `src/roster-gen/db/rosterGen.ts#buildMonthlyRosterForFleet`
-(new optional parameter) into
-`src/app/roster/[year]/[month]/actions.ts#generateRosterAction` (reads an
-optional `targetBlockHours` form field, in whole/fractional HOURS for the
-human, converted to minutes) into the generation form and its
-confirm-before-overwrite re-POST in
-`src/app/roster/[year]/[month]/page.tsx` (a plain `<input type="number">`
-next to the fleet `<select>`, carried through the `genConfirm`/`genExisting`
-redirect exactly like `fleetType` already is, so a confirmed overwrite
-doesn't lose the chosen value).
+**Wiring.** Threaded from `GenerateMonthlyRosterInput.targetBlockMinutesMin`/
+`targetBlockMinutesMax` through `generateMonthlyRoster` (both optional,
+both `undefined` = unchanged prior behavior) into
+`src/roster-gen/db/rosterGen.ts#buildMonthlyRosterForFleet` (two new
+optional parameters) into
+`src/app/roster/[year]/[month]/actions.ts#generateRosterAction` (reads
+optional `targetBlockHoursMin`/`targetBlockHoursMax` form fields, in
+whole/fractional HOURS for the human, each converted to minutes
+independently) into the generation form and its confirm-before-overwrite
+re-POST in `src/app/roster/[year]/[month]/page.tsx` (two plain
+`<input type="number">`s next to the fleet `<select>`, defaulting to
+80/90 per the user's stated range, both carried through the
+`genConfirm`/`genExisting` redirect exactly like `fleetType` already is, so
+a confirmed overwrite doesn't lose the chosen range).
+
+---
+
+**Original entry, as first recorded (single open floor, now superseded
+above):**
+
+> Direct user request this session: push a real generated roster toward a
+> target monthly block-hour figure (e.g. 85h, a standard real-world minimum
+> guaranteed block-hour threshold in airline pay structures), without ever
+> relaxing GCAA legality or the days-off pacing heuristics (#3 above).
+>
+> `GenerateMonthlyRosterInput.targetBlockMinutes` (`src/roster-gen/types.ts`)
+> is optional and, when set, changes ONLY which already-legal candidate
+> `generateMonthlyRoster.ts`'s construction loop tries first on a given day —
+> never whether a day gets a duty at all beyond what was already legal, and
+> never any legal threshold. Concretely: while the running total block
+> minutes assigned so far is below `targetBlockMinutes`, a day's fitting
+> candidate pairings are sorted by descending total block time
+> (`orderCandidatesForSelection`) instead of using the existing
+> deterministic-shuffle order (#7 above); once the running total
+> reaches/exceeds the target, ordering reverts to the existing shuffle
+> exactly as before this field existed. `Array#sort` is stable, so candidates
+> tied on block time keep their shuffled relative order — route variety among
+> ties is unaffected.
+>
+> **Soft floor, not a guarantee.** If the month's legal flying capacity
+> (given the candidate pool, the 7-consecutive-duty-day ceiling, and the
+> days-off floor) simply cannot reach `targetBlockMinutes`, generation still
+> completes normally — `summary.totalBlockMinutes` just reports whatever was
+> actually achieved, under target. No hard failure/error is raised for
+> undershooting.

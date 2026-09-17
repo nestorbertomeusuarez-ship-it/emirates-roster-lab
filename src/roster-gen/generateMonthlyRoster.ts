@@ -43,13 +43,15 @@
  * day it would occupy (FDP-table, minimum rest, and the cumulative
  * block/duty-hour ceilings). If no candidate fits, the day is OFF.
  *
- * OPTIONAL BLOCK-HOURS-FLOOR BIAS: when `input.targetBlockMinutes` is set
- * and the running total block minutes assigned so far is still below it, a
- * day's fitting candidates are tried in descending block-time order
- * instead of the deterministic-shuffle order above, so the month
- * accumulates block hours faster while under target. This never changes
- * (a)/(b)/(c) above — it only reorders which already-legal candidate is
- * tried first among the day's fitting options. See
+ * OPTIONAL BLOCK-HOURS TARGET RANGE BIAS: when `input.targetBlockMinutesMin`
+ * and/or `input.targetBlockMinutesMax` are set, a day's fitting candidates
+ * are reordered (see `orderCandidatesForSelection`): descending block-time
+ * order (prefer bigger) while the running total is below the floor, then
+ * ascending block-time order (prefer smaller) once at/above the floor — so
+ * the month accumulates block hours faster while under-target and avoids
+ * needlessly overshooting the ceiling once in/past range. This never
+ * changes (a)/(b)/(c) above — it only reorders which already-legal
+ * candidate is tried first among the day's fitting options. See
  * docs/roster-gen-assumptions.md item 19.
  * `consecutiveDutyDays >= 6` pre-emptively forces an OFF day (margin below
  * the legal 7-day ceiling), and from day 24 onward an OFF day is forced
@@ -320,24 +322,48 @@ function sumBlockMinutes(days: RosterGenDay[]): number {
 }
 
 /**
- * Orders one day's candidate pairings for the construction loop below. When
- * `targetBlockMinutes` is set and `runningBlockMinutesSoFar` is still below
- * it, returns a NEW array sorted by descending block time (Array#sort is
- * stable, so candidates with equal block time keep their existing
- * deterministic-shuffle relative order — route variety among ties is
- * unaffected). Otherwise returns `candidates` unchanged (existing
- * behavior). Never mutates `candidates` itself, since the same shuffled
- * bucket array is looked up again if this date were ever revisited.
+ * Orders one day's candidate pairings for the construction loop below, per
+ * `GenerateMonthlyRosterInput.targetBlockMinutesMin`/`targetBlockMinutesMax`'s
+ * doc comment (types.ts) — see that comment for the full semantics table.
+ * Always returns a NEW array when reordering (Array#sort is stable, so
+ * candidates tied on block time keep their existing deterministic-shuffle
+ * relative order — route variety among ties is unaffected); returns
+ * `candidates` unchanged when neither bound is set. Never mutates
+ * `candidates` itself, since the same shuffled bucket array is looked up
+ * again if this date were ever revisited.
  */
 function orderCandidatesForSelection(
   candidates: GeneratedPairing[],
   runningBlockMinutesSoFar: number,
-  targetBlockMinutes: number | undefined
+  targetBlockMinutesMin: number | undefined,
+  targetBlockMinutesMax: number | undefined
 ): GeneratedPairing[] {
-  if (targetBlockMinutes == null || runningBlockMinutesSoFar >= targetBlockMinutes) {
+  if (targetBlockMinutesMin == null && targetBlockMinutesMax == null) {
     return candidates;
   }
-  return [...candidates].sort((a, b) => pairingBlockMinutes(b) - pairingBlockMinutes(a));
+
+  // Ceiling-only (no floor configured): no floor phase to fill toward
+  // first, so always prefer the smaller candidate from day 1 — minimizes
+  // how far a single day's jump can overshoot the cap.
+  if (targetBlockMinutesMin == null) {
+    return [...candidates].sort((a, b) => pairingBlockMinutes(a) - pairingBlockMinutes(b));
+  }
+
+  const belowFloor = runningBlockMinutesSoFar < targetBlockMinutesMin;
+  if (belowFloor) {
+    return [...candidates].sort((a, b) => pairingBlockMinutes(b) - pairingBlockMinutes(a));
+  }
+
+  // At/above the floor. Floor-only (no ceiling configured): reverts to the
+  // original open-floor behavior — no further bias once the floor is met.
+  if (targetBlockMinutesMax == null) {
+    return candidates;
+  }
+
+  // At/above the floor with a ceiling configured (whether still inside
+  // [min, max] or already past max from a single day's jump): prefer the
+  // smaller candidate to avoid overshooting further.
+  return [...candidates].sort((a, b) => pairingBlockMinutes(a) - pairingBlockMinutes(b));
 }
 
 function countDistinctPairings(days: RosterGenDay[]): number {
@@ -356,8 +382,16 @@ function countDistinctPairings(days: RosterGenDay[]): number {
 export function generateMonthlyRoster(
   input: GenerateMonthlyRosterInput
 ): MonthlyRosterGenerationResult {
-  const { fleetType, year, month, pairings, airportTimeZones, operatorConfig, targetBlockMinutes } =
-    input;
+  const {
+    fleetType,
+    year,
+    month,
+    pairings,
+    airportTimeZones,
+    operatorConfig,
+    targetBlockMinutesMin,
+    targetBlockMinutesMax,
+  } = input;
 
   const daysInMonth = daysInMonthOf(year, month);
   const dates = Array.from({ length: daysInMonth }, (_, i) => isoDate(year, month, i + 1));
@@ -397,7 +431,8 @@ export function generateMonthlyRoster(
       const orderedCandidates = orderCandidatesForSelection(
         candidates,
         runningBlockMinutesSoFar,
-        targetBlockMinutes
+        targetBlockMinutesMin,
+        targetBlockMinutesMax
       );
       for (const candidate of orderedCandidates) {
         if (dayIndex0 + candidate.tripDays > daysInMonth) continue; // wouldn't fit in the month
