@@ -30,7 +30,10 @@
  *     simplification applied identically during both construction-time
  *     screening and the final verification pass, so it cannot itself cause
  *     construction/verification disagreement.
- *   - assume anything about the crew member's rest state before day 1 of
+ *   - **EXTENDED by item 24 — see the "CROSS-MONTH REST + CONSECUTIVE-
+ *     DUTY-DAY CARRY-OVER" section below; the original text is preserved
+ *     as what still applies whenever `priorMonthTailDays` is absent.**
+ *     assume anything about the crew member's rest state before day 1 of
  *     the month (no prior-month history) — the very first duty of the
  *     month is never rest-checked against a "previous" duty.
  *
@@ -208,13 +211,50 @@
  * behavior it mirrors: if legality and the real days-off/duty-day floors
  * leave no room, the month can still land under `targetBlockMinutesMin`,
  * which remains an accepted outcome, never an error.
+ *
+ * CROSS-MONTH REST + CONSECUTIVE-DUTY-DAY CARRY-OVER
+ * (docs/roster-gen-assumptions.md item 24): self-diagnosed gap, not a user
+ * complaint — every check above only ever looks at THIS month's own `days`
+ * array, so day 1 of any month was never rest-checked against the pilot's
+ * real last duty of the previous month, and a consecutive-duty-day run
+ * spanning the boundary was silently reset to 0. `input.priorMonthTailDays`
+ * (optional; `undefined` reproduces today's behavior byte-for-byte) is the
+ * previous calendar month's ACTUAL roster, used ONLY to:
+ *
+ *   - seed `evaluateRosterDays`'s `prevDutyEnd` from the last real FLIGHT
+ *     day found in it (`findPriorMonthDutyEnd`), so day 1's minimum-rest
+ *     check has real history instead of starting from nothing.
+ *   - continue a consecutive-duty-day run into the new month
+ *     (`countConsecutiveDutyDaysAtEndWithCarryOver`), so a run that ends
+ *     the prior month still flying correctly counts toward both the
+ *     construction loop's `forcedOffByConsecutiveCap`/`MAX_CONSECUTIVE_DUTY_DAYS`
+ *     eligibility check (the site that actually PREVENTS an illegal day
+ *     from ever being offered) and `evaluateRosterDays`'s own
+ *     `cumulative.consecutiveDutyDays` (the final verification pass).
+ *
+ * DELIBERATELY NOT DONE: the 7/14/28-day trailing block/duty-minute sums
+ * (`trailingSum`/`trailingCount` over this month's own `dailyBlockMinutes`/
+ * `dailyDutyMinutes`/`isOff`) and the days-off-in-N-day window checks
+ * (`gcaa-days-off-2-in-14`, `-7-in-28`, `-avg-8-per-28-over-3`) are NOT
+ * extended by `priorMonthTailDays` — they stay scoped to the current
+ * month only, and stay suppressed until day 14/28 of *this* month's own
+ * history, exactly as before. Carrying those over would need up to 28 days
+ * of prior daily arrays AND un-suppressing those checks from day 1 when
+ * real history exists instead of only from day 14/28 — a materially
+ * bigger change than this item makes. Documented here as a known,
+ * intentional follow-on gap, not an oversight.
  */
 
 import type { GeneratedPairing, PairingLegResult } from '../pairing/types';
 import { computeDutyMinutes, computeReportTime } from '../pairing/dutyTimes';
 import { toFlightDutyPeriod } from '../pairing/toFlightDutyPeriod';
 import { evaluateDuty } from '../ftl/evaluate';
-import type { CumulativeTotals, OperatorSpecificOverrides, RestPeriodInput } from '../ftl/types';
+import type {
+  CumulativeTotals,
+  FlightDutyPeriod,
+  OperatorSpecificOverrides,
+  RestPeriodInput,
+} from '../ftl/types';
 import { classifyHaulType, type HaulType } from './haulType';
 import type {
   DatedRuleEvaluation,
@@ -327,6 +367,27 @@ function countConsecutiveDutyDaysAtEnd(days: RosterGenDay[]): number {
   return count;
 }
 
+/**
+ * Docs item 24 — like `countConsecutiveDutyDaysAtEnd`, but a run that fills
+ * the entirety of `days` continues counting into `priorMonthTailDays`'s own
+ * trailing FLIGHT run. No change to `countConsecutiveDutyDaysAtEnd` itself
+ * is needed: prepending is correct as-is, because the backward walk only
+ * ever reaches into `priorMonthTailDays` when EVERY day of `days` is
+ * itself FLIGHT — the moment it hits a non-FLIGHT day (in either array),
+ * the walk stops exactly where it always did. `priorMonthTailDays` absent
+ * degenerates to the plain call.
+ */
+function countConsecutiveDutyDaysAtEndWithCarryOver(
+  days: RosterGenDay[],
+  priorMonthTailDays: RosterGenDay[] | undefined
+): number {
+  if (!priorMonthTailDays || priorMonthTailDays.length === 0) {
+    return countConsecutiveDutyDaysAtEnd(days);
+  }
+  return countConsecutiveDutyDaysAtEnd([...priorMonthTailDays, ...days]);
+}
+
+
 function buildCandidateDays(
   pairing: GeneratedPairing,
   dates: string[],
@@ -391,6 +452,76 @@ function buildDailyArrays(days: RosterGenDay[]): DailyArrays {
   return { dailyBlockMinutes, dailyDutyMinutes, isOff };
 }
 
+interface DutyEndInfo {
+  utc: Date;
+  minutes: number;
+  station: string;
+}
+
+/**
+ * The exact reportUTC/depAirportTz/`FlightDutyPeriod` computation a FLIGHT
+ * day with real legs needs — extracted (docs item 24) from
+ * `evaluateRosterDays`'s own per-day loop so it can be reused to inspect a
+ * day OUTSIDE that loop too (`findPriorMonthDutyEnd` below). Pure
+ * refactor — no behavior change to the loop itself. Returns `null` for an
+ * OFF day or a pure layover day with no legs that date, exactly like the
+ * loop's own `continue` conditions did inline.
+ */
+function computeFlightDayFdp(
+  day: RosterGenDay,
+  airportTimeZones: Record<string, string>
+): { fdp: FlightDutyPeriod; reportUTC: Date; lastOnBlocksUTC: Date; arrIata: string } | null {
+  if (day.assignment.type !== 'FLIGHT') return null;
+  const legs = legsOnDay(day.assignment.pairing, day.date);
+  if (legs.length === 0) return null;
+
+  const depIata = legs[0].instance.depIata;
+  const reportUTC = computeReportTime(legs[0].instance.depUTC).reportUTC;
+  const lastOnBlocksUTC = legs[legs.length - 1].instance.arrUTC;
+
+  const fdp = toFlightDutyPeriod({
+    reportUTC,
+    depAirportTz: airportTimeZones[depIata] ?? 'UTC',
+    legs: legs.map((leg) => ({ blockTimeMin: leg.instance.blockTimeMin })),
+    lastOnBlocksUTC,
+    isAcclimatised: true,
+  });
+
+  return { fdp, reportUTC, lastOnBlocksUTC, arrIata: legs[legs.length - 1].instance.arrIata };
+}
+
+/**
+ * Docs item 24 — the last real duty of `priorMonthTailDays` (the previous
+ * calendar month's ACTUAL roster), in the same `{ utc, minutes, station }`
+ * shape `evaluateRosterDays`'s own `prevDutyEnd` already uses, so day 1 of
+ * the current month can be rest-checked against it instead of starting
+ * with no history. `dailyDutyMinutes` (the same per-day fallback
+ * `evaluateRosterDays` itself uses when `fdp.actualOrPlannedFdpMinutes` is
+ * unset) is derived from `buildDailyArrays(priorMonthTailDays)` so this
+ * mirrors the main loop's own computation exactly, not an approximation of
+ * it. Returns `null` when `priorMonthTailDays` is absent/empty, or when no
+ * FLIGHT day with real legs is found in it — the caller then behaves
+ * exactly as if no prior-month data existed at all.
+ */
+function findPriorMonthDutyEnd(
+  priorMonthTailDays: RosterGenDay[] | undefined,
+  airportTimeZones: Record<string, string>
+): DutyEndInfo | null {
+  if (!priorMonthTailDays || priorMonthTailDays.length === 0) return null;
+
+  const { dailyDutyMinutes } = buildDailyArrays(priorMonthTailDays);
+  for (let i = priorMonthTailDays.length - 1; i >= 0; i -= 1) {
+    const built = computeFlightDayFdp(priorMonthTailDays[i], airportTimeZones);
+    if (!built) continue;
+    return {
+      utc: built.lastOnBlocksUTC,
+      minutes: built.fdp.actualOrPlannedFdpMinutes ?? dailyDutyMinutes[i],
+      station: built.arrIata,
+    };
+  }
+  return null;
+}
+
 /**
  * Runs the real `src/ftl/evaluate.ts#evaluateDuty()` against every FLIGHT
  * day (with actual legs that day) in `days`, in chronological order,
@@ -416,35 +547,33 @@ function buildDailyArrays(days: RosterGenDay[]): DailyArrays {
  * surfaced. `avgDaysOffPer28dOver3Periods` is approximated by this single
  * period's own 28-day days-off count (documented limitation — a true
  * 3-period average needs 3 months of history).
+ *
+ * `priorMonthTailDays` (docs item 24) optionally seeds `prevDutyEnd` and the
+ * consecutive-duty-day count from the previous calendar month's ACTUAL
+ * roster — see the module doc comment's "CROSS-MONTH REST + CONSECUTIVE-
+ * DUTY-DAY CARRY-OVER" section. `availableHistory14`/`availableHistory28`
+ * and the days-off-in-N-day window suppression below are DELIBERATELY NOT
+ * extended by it — see that same section for why.
  */
 export function evaluateRosterDays(
   days: RosterGenDay[],
   airportTimeZones: Record<string, string>,
-  operatorConfig?: OperatorSpecificOverrides
+  operatorConfig?: OperatorSpecificOverrides,
+  priorMonthTailDays?: RosterGenDay[]
 ): DatedRuleEvaluation[] {
   const { dailyBlockMinutes, dailyDutyMinutes, isOff } = buildDailyArrays(days);
   const results: DatedRuleEvaluation[] = [];
 
-  let prevDutyEnd: { utc: Date; minutes: number; station: string } | null = null;
+  let prevDutyEnd: DutyEndInfo | null = findPriorMonthDutyEnd(
+    priorMonthTailDays,
+    airportTimeZones
+  );
 
   for (let i = 0; i < days.length; i += 1) {
     const day = days[i];
-    if (day.assignment.type !== 'FLIGHT') continue;
-
-    const legs = legsOnDay(day.assignment.pairing, day.date);
-    if (legs.length === 0) continue; // pure layover day, nothing to evaluate
-
-    const depIata = legs[0].instance.depIata;
-    const reportUTC = computeReportTime(legs[0].instance.depUTC).reportUTC;
-    const lastOnBlocksUTC = legs[legs.length - 1].instance.arrUTC;
-
-    const fdp = toFlightDutyPeriod({
-      reportUTC,
-      depAirportTz: airportTimeZones[depIata] ?? 'UTC',
-      legs: legs.map((leg) => ({ blockTimeMin: leg.instance.blockTimeMin })),
-      lastOnBlocksUTC,
-      isAcclimatised: true,
-    });
+    const built = computeFlightDayFdp(day, airportTimeZones);
+    if (!built) continue;
+    const { fdp, reportUTC, lastOnBlocksUTC, arrIata } = built;
 
     let rest: RestPeriodInput | null = null;
     if (prevDutyEnd) {
@@ -462,7 +591,10 @@ export function evaluateRosterDays(
 
     const availableHistory14 = i + 1;
     const availableHistory28 = i + 1;
-    const consecutiveDutyDays = countConsecutiveDutyDaysAtEnd(days.slice(0, i + 1));
+    const consecutiveDutyDays = countConsecutiveDutyDaysAtEndWithCarryOver(
+      days.slice(0, i + 1),
+      priorMonthTailDays
+    );
 
     const cumulative: CumulativeTotals = {
       blockMinutes28d: trailingSum(dailyBlockMinutes, i, 28),
@@ -493,7 +625,7 @@ export function evaluateRosterDays(
     prevDutyEnd = {
       utc: lastOnBlocksUTC,
       minutes: fdp.actualOrPlannedFdpMinutes ?? dailyDutyMinutes[i],
-      station: legs[legs.length - 1].instance.arrIata,
+      station: arrIata,
     };
   }
 
@@ -663,6 +795,7 @@ export function generateMonthlyRoster(
     targetBlockMinutesMin,
     targetBlockMinutesMax,
     generationStrategy = 'MIX',
+    priorMonthTailDays,
   } = input;
 
   const daysInMonth = daysInMonthOf(year, month);
@@ -709,7 +842,10 @@ export function generateMonthlyRoster(
 
   while (dayIndex0 < daysInMonth) {
     const date = dates[dayIndex0];
-    const consecutiveDutyDaysBefore = countConsecutiveDutyDaysAtEnd(days);
+    const consecutiveDutyDaysBefore = countConsecutiveDutyDaysAtEndWithCarryOver(
+      days,
+      priorMonthTailDays
+    );
     const remainingDaysInMonth = daysInMonth - dayIndex0;
     const priorDayType = days.length > 0 ? days[days.length - 1].assignment.type : null;
     const isFreshOffStreakStart = priorDayType !== 'FLIGHT';
@@ -795,7 +931,12 @@ export function generateMonthlyRoster(
         const candidateDays = buildCandidateDays(candidate, dates, dayIndex0);
         const hypothetical = [...days, ...candidateDays];
         const candidateDates = new Set(candidateDays.map((d) => d.date));
-        const evaluations = evaluateRosterDays(hypothetical, airportTimeZones, operatorConfig);
+        const evaluations = evaluateRosterDays(
+          hypothetical,
+          airportTimeZones,
+          operatorConfig,
+          priorMonthTailDays
+        );
         const hasRed = evaluations.some(
           (e) => candidateDates.has(e.date) && e.evaluation.severity === 'RED'
         );
@@ -835,7 +976,12 @@ export function generateMonthlyRoster(
     }
   }
 
-  const evaluations = evaluateRosterDays(days, airportTimeZones, operatorConfig);
+  const evaluations = evaluateRosterDays(
+    days,
+    airportTimeZones,
+    operatorConfig,
+    priorMonthTailDays
+  );
   const flightDays = days.filter((d) => d.assignment.type === 'FLIGHT').length;
 
   return {

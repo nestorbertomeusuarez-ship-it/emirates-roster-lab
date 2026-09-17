@@ -21,6 +21,22 @@ export async function getOrCreateRosterMonth(
   });
 }
 
+/**
+ * Read-only — the RosterMonth row for year/month, or `null` if none exists
+ * yet. Never creates one (unlike `getOrCreateRosterMonth`) — fabricating a
+ * phantom row here would be wrong for a best-effort lookup
+ * (docs/roster-gen-assumptions.md item 24: this is used to find whether a
+ * PREVIOUS month's real roster exists to carry rest/consecutive-duty
+ * history from, not to guarantee one exists).
+ */
+export async function findRosterMonth(
+  prisma: PrismaClient,
+  year: number,
+  month: number
+): Promise<RosterMonth | null> {
+  return prisma.rosterMonth.findUnique({ where: { year_month: { year, month } } });
+}
+
 export async function listRosterEntries(
   prisma: PrismaClient,
   rosterMonthId: string

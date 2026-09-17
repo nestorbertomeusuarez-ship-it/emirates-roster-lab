@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { generatePairings } from '../pairing/generatePairings';
-import { generateMonthlyRoster } from './generateMonthlyRoster';
+import { evaluateRosterDays, generateMonthlyRoster } from './generateMonthlyRoster';
 import { classifyHaulType, type HaulType } from './haulType';
 import type { DatedFlightInstance, GeneratedPairing } from '../pairing/types';
-import type { GenerationStrategy } from './types';
+import type { GenerationStrategy, RosterGenDay } from './types';
 
 const YEAR = 2027;
 const MONTH = 6; // June 2027 — 30 days, arbitrary synthetic month
@@ -146,6 +146,83 @@ function buildHaulMixPairings(fleetType: string) {
     maxLayoverMinutes: 32 * 60,
     fleetTypes: [fleetType],
   });
+}
+
+function addDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * A single hand-built FLIGHT day with exact, caller-controlled leg timing —
+ * bypasses `generatePairings` entirely (docs item 24's tests need precise
+ * control over rest-gap timing and exact consecutive-day counts, which a
+ * shuffled/generated candidate pool doesn't give). Each call produces its
+ * own single-leg, single-day pairing (`tripDays: 1`) — fine for these
+ * tests, which only ever inspect one day's own `assignment.pairing` at a
+ * time, never a multi-day span.
+ */
+function buildHandBuiltFlightDay(
+  date: string,
+  fleetType: string,
+  depIata: string,
+  depUTC: Date,
+  arrIata: string,
+  arrUTC: Date,
+  blockTimeMin: number
+): RosterGenDay {
+  seq += 1;
+  const instance: DatedFlightInstance = {
+    scheduleLineId: `hand-built-${seq}`,
+    number: `EK${9000 + seq}`,
+    depIata,
+    arrIata,
+    serviceDate: date,
+    depUTC,
+    arrUTC,
+    blockTimeMin,
+    aircraftType: fleetType,
+  };
+  const pairing: GeneratedPairing = {
+    fleetType,
+    legs: [{ instance, layoverMinutesBeforeThisLeg: null }],
+    startServiceDate: date,
+    endServiceDate: date,
+    tripDays: 1,
+  };
+  return { date, assignment: { type: 'FLIGHT', pairing, dayOfPairing: 1 } };
+}
+
+/**
+ * `count` consecutive daily hand-built FLIGHT days starting `startDate`,
+ * each a short DXB round-trip-shaped hop (08:00-09:00 UTC, ~23.5h gap to
+ * the next day's 06:30 UTC report) — comfortably clears the 12h minimum
+ * rest floor between every consecutive pair, so a test using this fixture
+ * only ever exercises the consecutive-duty-day count, never an incidental
+ * rest violation.
+ */
+function buildConsecutiveHandBuiltFlightDays(
+  startDate: string,
+  count: number,
+  fleetType: string
+): RosterGenDay[] {
+  const days: RosterGenDay[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const date = addDaysIso(startDate, i);
+    days.push(
+      buildHandBuiltFlightDay(
+        date,
+        fleetType,
+        'DXB',
+        new Date(`${date}T08:00:00.000Z`),
+        'DXB',
+        new Date(`${date}T09:00:00.000Z`),
+        60
+      )
+    );
+  }
+  return days;
 }
 
 function firstFlightDayPairingBlockMinutes(
@@ -861,5 +938,136 @@ describe('generateMonthlyRoster — enforced min block-hours floor (docs item 23
     expect(second.days).toEqual(first.days);
     expect(second.summary).toEqual(first.summary);
     expect(second.evaluations).toEqual(first.evaluations);
+  });
+});
+
+describe('generateMonthlyRoster — cross-month rest + consecutive-duty-day carry-over (docs item 24)', () => {
+  // Prior-month tail ending 2027-05-31 (the day before this file's YEAR/MONTH
+  // fixture, June 2027, starts) — a single short DXB round-trip landing back
+  // at DXB 21:30 UTC. Paired below against a day-1 report time only ~10-11h
+  // later, comfortably under the 12h flight-crew minimum rest floor
+  // (ORO.FTL.225.G, `gcaa-min-rest-flight-crew`) — a real rest violation
+  // that only `priorMonthTailDays` can make visible.
+  const PRIOR_MONTH_LAST_DUTY: RosterGenDay[] = [
+    buildHandBuiltFlightDay(
+      '2027-05-31',
+      'A350',
+      'DXB',
+      new Date('2027-05-31T18:00:00.000Z'),
+      'DXB',
+      new Date('2027-05-31T21:30:00.000Z'),
+      210
+    ),
+  ];
+
+  it('evaluateRosterDays surfaces a real min-rest violation against the prior month, invisible without it', () => {
+    const days: RosterGenDay[] = [
+      buildHandBuiltFlightDay(
+        '2027-06-01',
+        'A350',
+        'DXB',
+        new Date('2027-06-01T09:00:00.000Z'), // report 07:30 UTC — 10h after the prior duty's 21:30 UTC end
+        'BOM',
+        new Date('2027-06-01T12:00:00.000Z'),
+        180
+      ),
+    ];
+
+    const withCarryOver = evaluateRosterDays(days, AIRPORT_TZS, undefined, PRIOR_MONTH_LAST_DUTY);
+    expect(
+      withCarryOver.some(
+        (e) => e.evaluation.citation.ruleId === 'gcaa-min-rest-flight-crew' && e.evaluation.severity === 'RED'
+      )
+    ).toBe(true);
+
+    const withoutCarryOver = evaluateRosterDays(days, AIRPORT_TZS);
+    expect(
+      withoutCarryOver.some((e) => e.evaluation.citation.ruleId === 'gcaa-min-rest-flight-crew')
+    ).toBe(false);
+  });
+
+  it('generateMonthlyRoster itself avoids the now-illegal day-1 accept (construction loop, not just the verification pass)', () => {
+    // buildSingleRoutePairings departs DXB at 10:00 UTC every day -> day-1
+    // report is 08:30 UTC, only 11h after PRIOR_MONTH_LAST_DUTY's 21:30 UTC
+    // end. If the construction loop didn't know about this history, it
+    // would happily accept day 1 (no RED without priorMonthTailDays) and
+    // only the final verification pass would ever have caught it.
+    const pairings = buildSingleRoutePairings('A350');
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+      priorMonthTailDays: PRIOR_MONTH_LAST_DUTY,
+    });
+
+    expect(result.days[0].assignment.type).toBe('OFF');
+    const reds = result.evaluations.filter((e) => e.evaluation.severity === 'RED');
+    expect(reds).toEqual([]);
+  });
+
+  it('evaluateRosterDays continues a consecutive-duty-day run into the new month', () => {
+    const priorMonthTailDays = buildConsecutiveHandBuiltFlightDays('2027-05-26', 6, 'A350'); // May 26-31
+    const days = buildConsecutiveHandBuiltFlightDays('2027-06-01', 3, 'A350'); // June 1-3 -> 9th consecutive day
+
+    const withCarryOver = evaluateRosterDays(days, AIRPORT_TZS, undefined, priorMonthTailDays);
+    expect(
+      withCarryOver.some(
+        (e) =>
+          e.evaluation.citation.ruleId === 'gcaa-days-off-consecutive-duty' &&
+          e.evaluation.severity === 'RED'
+      )
+    ).toBe(true);
+
+    const withoutCarryOver = evaluateRosterDays(days, AIRPORT_TZS);
+    expect(
+      withoutCarryOver.some(
+        (e) =>
+          e.evaluation.citation.ruleId === 'gcaa-days-off-consecutive-duty' &&
+          e.evaluation.severity === 'RED'
+      )
+    ).toBe(false);
+  });
+
+  it('generateMonthlyRoster forces day 1 OFF when the prior month already hit the consecutive-duty soft cap', () => {
+    const priorMonthTailDays = buildConsecutiveHandBuiltFlightDays('2027-05-26', 6, 'A350'); // 6 in a row, meets the soft cap
+
+    const withCarryOver = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings: buildSingleRoutePairings('A350'),
+      airportTimeZones: AIRPORT_TZS,
+      priorMonthTailDays,
+    });
+    expect(withCarryOver.days[0].assignment.type).toBe('OFF');
+
+    const withoutCarryOver = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings: buildSingleRoutePairings('A350'),
+      airportTimeZones: AIRPORT_TZS,
+    });
+    expect(withoutCarryOver.days[0].assignment.type).toBe('FLIGHT');
+  });
+
+  it('is a no-op when priorMonthTailDays is absent — omitted vs. explicit undefined produce identical output', () => {
+    const pairings = buildSingleRoutePairings('A350');
+    const inputBase = {
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+    };
+
+    const omitted = generateMonthlyRoster(inputBase);
+    const explicit = generateMonthlyRoster({ ...inputBase, priorMonthTailDays: undefined });
+
+    expect(explicit.days).toEqual(omitted.days);
+    expect(explicit.evaluations).toEqual(omitted.evaluations);
+    expect(explicit.summary).toEqual(omitted.summary);
   });
 });

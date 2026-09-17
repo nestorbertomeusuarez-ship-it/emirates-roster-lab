@@ -1081,3 +1081,114 @@ range moved from 80-90h to 70-90h (`page.tsx`), reflecting that 70h is
 realistically reachable most months now that the floor is actually
 enforced, without needing to starve legality/pacing to chase a higher
 number.
+
+## 24. Cross-month rest + consecutive-duty-day carry-over: `priorMonthTailDays`, a best-effort seed from the real previous month, never a fabricated one
+
+Self-diagnosed gap, not a user complaint — surfaced during a broader survey
+of the codebase for improvement candidates. Every check in this generator,
+from item 1 through item 23, only ever looks at the CURRENT month's own
+`days` array. Day 1 of any month was therefore never rest-checked against
+the pilot's real last duty of the previous month, and a consecutive-duty-day
+run that was already in progress at month-end silently reset to 0 on day 1
+of the next month. This is a genuine correctness gap, not a cosmetic one: a
+demanding end-of-month duty could make day 1 of the new month actually
+illegal (minimum rest, ORO.FTL.225.G, or the 7-consecutive-duty-day
+ceiling, ORO.FTL.205.G) while this generator reported it GREEN.
+
+### What changed
+
+`GenerateMonthlyRosterInput.priorMonthTailDays?: RosterGenDay[]` — the
+previous calendar month's ACTUAL roster (as many trailing days as the
+caller has; the whole month is fine, cost is negligible). `undefined`
+(the default) reproduces every prior behavior byte-for-byte — every
+existing caller and test is unaffected unless it opts in.
+
+When present, it is used ONLY to:
+
+- Seed `evaluateRosterDays`'s `prevDutyEnd` from the last real FLIGHT day
+  found in it (`findPriorMonthDutyEnd`), so day 1's minimum-rest check has
+  real history instead of starting from nothing.
+- Continue a consecutive-duty-day run into the new month
+  (`countConsecutiveDutyDaysAtEndWithCarryOver`, which simply prepends
+  `priorMonthTailDays` before the existing backward-walk count — no change
+  needed to `countConsecutiveDutyDaysAtEnd` itself). This feeds BOTH the
+  construction loop's own `forcedOffByConsecutiveCap`/
+  `MAX_CONSECUTIVE_DUTY_DAYS` eligibility check — the site that actually
+  PREVENTS an illegal day from ever being offered — and
+  `evaluateRosterDays`'s `cumulative.consecutiveDutyDays` (the final
+  verification pass). Fixing only the verification pass would have made
+  this generator merely DETECT an illegal day-1 duty after constructing
+  it, not avoid constructing it in the first place.
+
+`buildMonthlyRosterForFleet` (`src/roster-gen/db/rosterGen.ts`) loads this
+automatically for every caller: `findRosterMonth` (new, read-only,
+`src/pairing/db/roster.ts`) looks up whether a `RosterMonth` exists for
+year/month-1 (handling the December -> January wraparound); if none exists
+(the common case — the very first month ever generated, or a gap month),
+`loadPriorMonthTailDays` returns `undefined` and generation falls back to
+exactly today's behavior. If one exists, its days are reconstructed via
+the existing `loadRosterGenDaysForMonth` (Phase 5 Slice 1) and passed
+through. This lookup is deliberately NOT wrapped in a blanket try/catch —
+only the "no RosterMonth exists" case is treated as expected/benign; a
+genuine error reconstructing an EXISTING prior month is left to propagate
+rather than silently swallowed, since this feature exists specifically to
+catch real safety issues and silently skipping it on an unexpected error
+would defeat its own point.
+
+### Deliberately NOT done
+
+The 7/14/28-day trailing block/duty-minute sums (`trailingSum`/
+`trailingCount` over the CURRENT month's own `dailyBlockMinutes`/
+`dailyDutyMinutes`/`isOff`) and the days-off-in-N-day window checks
+(`gcaa-days-off-2-in-14`, `-7-in-28`, `-avg-8-per-28-over-3`) are NOT
+extended by `priorMonthTailDays` — they stay scoped to the current month
+only, and stay suppressed until day 14/28 of *this* month's own history,
+exactly as before this item. Carrying those over would need up to 28 days
+of prior daily arrays AND would mean un-suppressing those specific checks
+from day 1 of a month when real prior history actually exists (currently
+they're unconditionally suppressed until day 14/28 regardless) — a
+materially bigger change than seeding just the rest check and the
+consecutive-duty-day count. This is recorded here as a known, intentional
+follow-on gap, not an oversight — a future item can pick it up.
+
+### Verification
+
+New `describe('generateMonthlyRoster — cross-month rest + consecutive-duty-day
+carry-over (docs item 24)')` block in `generateMonthlyRoster.test.ts`, using
+hand-built single-leg `RosterGenDay` fixtures (`buildHandBuiltFlightDay`/
+`buildConsecutiveHandBuiltFlightDays`, bypassing `generatePairings` for
+exact control over rest-gap timing and exact consecutive-day counts):
+
+- A real min-rest violation (report time ~10-11h after the prior month's
+  last duty ended, under the 12h flight-crew floor) surfaces as RED with
+  `priorMonthTailDays` set, and is invisible without it — proven both via a
+  direct `evaluateRosterDays` call and via `generateMonthlyRoster` itself
+  correctly steering day 1 to OFF instead of accepting the now-illegal
+  candidate (zero RED in the finished result — the construction-loop fix,
+  not just the verification-pass fix).
+- A 6-day prior-month FLIGHT tail + a 3-day current-month run (9 total)
+  surfaces `gcaa-days-off-consecutive-duty` as RED with carry-over, GREEN
+  without it — proven both via a direct `evaluateRosterDays` call and via
+  `generateMonthlyRoster` forcing day 1 OFF when the prior month already
+  hit the 6-day soft cap (vs. FLIGHT in a control run without it).
+- Absence parity: omitting `priorMonthTailDays` vs. passing it `undefined`
+  explicitly produce byte-for-byte identical `days`/`evaluations`/`summary`.
+
+Real read-only cross-boundary verification against the live DB was **not
+possible** — `prisma/seed-data/dxb-seed-schedule.json` only covers October
+2026, so there is no September 2026 `RosterMonth`/flight data to carry over
+from. Substitute: a read-only `buildMonthlyRosterForFleet(prisma, 2026, 10,
+...)` run confirmed byte-identical output to before this item (September
+2026 has no `RosterMonth` row, so `findRosterMonth` returns `null` and
+generation falls back to exactly the pre-item-24 path) — this exercises the
+graceful-degrade path for real; the carry-over path itself is covered only
+by the synthetic unit tests above until a real adjacent month exists.
+
+### Wiring
+
+New optional `GenerateMonthlyRosterInput.priorMonthTailDays` field. New
+`findRosterMonth` export in `src/pairing/db/roster.ts`. New
+`previousMonthOf`/`loadPriorMonthTailDays` in `src/roster-gen/db/rosterGen.ts`,
+wired into `buildMonthlyRosterForFleet` automatically — `actions.ts` and
+the generation form needed zero changes; every existing caller gets
+cross-month carry-over for free.

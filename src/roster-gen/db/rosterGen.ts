@@ -10,11 +10,12 @@
 
 import type { PrismaClient } from '@prisma/client';
 import { generatePairingsForMonth } from '../../pairing/db/pairings';
-import { assignPairingDuty, assignSimpleDuty } from '../../pairing/db/roster';
+import { assignPairingDuty, assignSimpleDuty, findRosterMonth } from '../../pairing/db/roster';
 import { getAirportTimeZones } from '../../lib/airportTimeZones';
 import { EMIRATES_OPERATOR_CONFIG } from '../../ftl/operatorConfig';
 import { generateMonthlyRoster } from '../generateMonthlyRoster';
-import type { GenerationStrategy, MonthlyRosterGenerationResult } from '../types';
+import { loadRosterGenDaysForMonth } from './loadRosterGenDays';
+import type { GenerationStrategy, MonthlyRosterGenerationResult, RosterGenDay } from '../types';
 
 /**
  * Pairing-search constraints used to build the candidate pool for
@@ -28,18 +29,49 @@ export const ROSTER_GEN_PAIRING_CONSTRAINTS = {
   maxLayoverMinutes: 48 * 60,
 };
 
+function previousMonthOf(year: number, month: number): { year: number; month: number } {
+  return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+}
+
+/**
+ * Best-effort lookup of the previous calendar month's ACTUAL roster, for
+ * `generateMonthlyRoster`'s `priorMonthTailDays` (docs/roster-gen-assumptions.md
+ * item 24). Returns `undefined` — never throws — when no `RosterMonth` row
+ * exists yet for the prior month (the common case: the very first month
+ * ever generated, or a gap month nobody assigned). This is NOT wrapped in a
+ * blanket try/catch: a genuine error from `loadRosterGenDaysForMonth` is
+ * left to propagate rather than silently swallowed, since this feature
+ * exists specifically to catch real rest/consecutive-duty safety issues —
+ * silently skipping it on an unexpected error would defeat its own point.
+ */
+async function loadPriorMonthTailDays(
+  prisma: PrismaClient,
+  year: number,
+  month: number
+): Promise<RosterGenDay[] | undefined> {
+  const prev = previousMonthOf(year, month);
+  const priorRosterMonth = await findRosterMonth(prisma, prev.year, prev.month);
+  if (!priorRosterMonth) return undefined;
+  return loadRosterGenDaysForMonth(prisma, priorRosterMonth.id, prev.year, prev.month);
+}
+
 /**
  * Builds (but does not persist) a full-month roster for one fleet type:
  * ensures/reads flight instances + candidate pairings for the month, reads
  * every known airport's timezone, and runs the pure generator.
  *
  * `targetBlockMinutesMin`/`targetBlockMinutesMax` are optional and threaded
- * straight through to `generateMonthlyRoster` — `targetBlockMinutesMax` is
- * now a HARD ceiling, `targetBlockMinutesMin` is informational only (see
- * docs/roster-gen-assumptions.md item 20). `generationStrategy` is optional
- * and defaults to `'MIX'` when unset (see `GenerationStrategy` in
+ * straight through to `generateMonthlyRoster` — both are now enforced (a
+ * hard ceiling and a best-effort floor respectively, see
+ * docs/roster-gen-assumptions.md items 20/23). `generationStrategy` is
+ * optional and defaults to `'MIX'` when unset (see `GenerationStrategy` in
  * `../types.ts`). All three `undefined` behaves exactly as before these
  * parameters existed.
+ *
+ * Also automatically loads and threads through `priorMonthTailDays` — the
+ * previous calendar month's ACTUAL roster, if one exists (docs item 24) —
+ * so every caller gets cross-month rest/consecutive-duty-day carry-over for
+ * free, with no new parameter of its own.
  */
 export async function buildMonthlyRosterForFleet(
   prisma: PrismaClient,
@@ -56,6 +88,7 @@ export async function buildMonthlyRosterForFleet(
   });
 
   const airportTimeZones = await getAirportTimeZones(prisma);
+  const priorMonthTailDays = await loadPriorMonthTailDays(prisma, year, month);
 
   return generateMonthlyRoster({
     fleetType,
@@ -69,6 +102,7 @@ export async function buildMonthlyRosterForFleet(
     targetBlockMinutesMin,
     targetBlockMinutesMax,
     generationStrategy,
+    priorMonthTailDays,
   });
 }
 

@@ -129,6 +129,18 @@ export interface GenerateMonthlyRosterInput {
   targetBlockMinutesMax?: number;
   /** See `GenerationStrategy`'s doc comment above. Defaults to `'MIX'` when unset. */
   generationStrategy?: GenerationStrategy;
+  /**
+   * Optional: the previous calendar month's ACTUAL persisted roster (as many
+   * trailing days as the caller has — the whole month is fine, negligible
+   * cost), used ONLY to seed day 1's minimum-rest check and continue a
+   * consecutive-duty-day run into this month (docs/roster-gen-assumptions.md
+   * item 24, see `generateMonthlyRoster.ts`'s "CROSS-MONTH REST +
+   * CONSECUTIVE-DUTY-DAY CARRY-OVER" module doc section for the full
+   * design). `undefined` (default) reproduces this generator's pre-item-24
+   * behavior exactly — day 1 of the month is never rest-checked against a
+   * "previous" duty, matching every existing caller/test unchanged.
+   */
+  priorMonthTailDays?: RosterGenDay[];
 }
 
 export interface MonthlyRosterGenerationResult {
