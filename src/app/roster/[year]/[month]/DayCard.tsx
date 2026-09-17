@@ -148,6 +148,19 @@ function FlightSummaryLine({ summary }: { summary: FlightDaySummary }) {
   );
 }
 
+// Direct user feedback (2026-09-17): "Pairing cont'd (day 2)" read as
+// unclear jargon on continuation days, and gave no sense of the trip's
+// total length there (only the start day's "FLIGHT (3d)" suffix showed
+// that). Unified into one "Day X/Y" progress label used identically on
+// every day of a multi-day trip — start and continuation alike — so the
+// whole trip's shape is legible from any single cell. A same-day
+// out-and-back (spansDays <= 1, or no pairing context at all) just says
+// "Flight": "Day 1/1" would be redundant noise for the common case.
+function tripDayLabel(dayOfPairing: number | null, spansDays: number | null): string {
+  if (dayOfPairing === null || spansDays === null || spansDays <= 1) return 'Flight';
+  return `Day ${dayOfPairing}/${spansDays}`;
+}
+
 function summarizePairing(pairing: GeneratedPairing): string {
   const route = pairing.legs.map((leg) => leg.instance.depIata).concat(
     pairing.legs[pairing.legs.length - 1].instance.arrIata
@@ -332,11 +345,11 @@ export default function DayCard({
               href={pairingHref}
               className="rounded bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100 px-1 py-0.5 block underline"
             >
-              Pairing cont&apos;d (day {dayOfPairing})
+              {tripDayLabel(dayOfPairing, entry?.spansDays ?? null)}
             </Link>
           ) : (
             <div className="rounded bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100 px-1 py-0.5">
-              Pairing cont&apos;d (day {dayOfPairing})
+              {tripDayLabel(dayOfPairing, entry?.spansDays ?? null)}
             </div>
           )}
           {flightSummary && <FlightSummaryLine summary={flightSummary} />}
@@ -348,17 +361,15 @@ export default function DayCard({
               href={pairingHref}
               className="rounded bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 px-1 py-0.5 block underline"
             >
-              {entry.dutyType}
-              {entry.dutyType === 'FLIGHT' && entry.spansDays
-                ? ` (${entry.spansDays}d)`
-                : ''}
+              {entry.dutyType === 'FLIGHT'
+                ? tripDayLabel(dayOfPairing, entry.spansDays)
+                : entry.dutyType}
             </Link>
           ) : (
             <div className="rounded bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 px-1 py-0.5">
-              {entry.dutyType}
-              {entry.dutyType === 'FLIGHT' && entry.spansDays
-                ? ` (${entry.spansDays}d)`
-                : ''}
+              {entry.dutyType === 'FLIGHT'
+                ? tripDayLabel(dayOfPairing, entry.spansDays)
+                : entry.dutyType}
             </div>
           )}
           {flightSummary && <FlightSummaryLine summary={flightSummary} />}
