@@ -77,6 +77,38 @@
  * suppressed until a full N-day window of *this* roster has elapsed —
  * they are not well-defined against a partial window with no prior-month
  * history, and this generator does not fabricate one).
+ *
+ * WEEKLY-BLOCK PACING (docs/roster-gen-assumptions.md item 21, extending
+ * items 3 and 20): the month-level checks above are necessary but not
+ * sufficient — a purely day-by-day greedy walk can legally spend the ENTIRE
+ * `targetBlockMinutesMax` budget in the first 2-3 weeks (nothing above stops
+ * it), forcing every remaining day of the month OFF as one giant tail once
+ * the budget runs out. This was diagnosed against the user's real live
+ * October 2026 roster (10 consecutive OFF days at the end of the month) and
+ * is fixed by two ADDITIONAL, narrower eligibility/pacing layers, both
+ * scoped to simple sequential 7-day-from-day-1 "week slices" (NOT calendar
+ * ISO weeks — see `numberOfWeekSlices`/`weekSliceBoundsForDay`):
+ *
+ *   1. When `targetBlockMinutesMax` is set, each week slice additionally
+ *      gets its own soft block-minutes slice (`targetBlockMinutesMax /
+ *      numberOfWeekSlices`, flat division) plus a 50% tolerance
+ *      (`WEEKLY_BLOCK_TOLERANCE_FRACTION`) — see
+ *      `filterCandidatesWithinWeeklyBudget`. This runs BESIDE (never
+ *      instead of) the existing month-level `filterCandidatesWithinBudget`;
+ *      a candidate must pass BOTH.
+ *   2. Independent of `targetBlockMinutesMax`, each week slice also gets its
+ *      own OFF-day target (`TARGET_DAYS_OFF_PER_MONTH` scaled to the
+ *      slice's own length, so a short trailing remainder slice isn't held to
+ *      a full week's target) — see `targetOffDaysForWeekSlice`. Exactly like
+ *      the existing month-level `PACING_CHECK_FROM_DAY` check, this forces
+ *      OFF as soon as it becomes mathematically necessary to still hit that
+ *      slice's own target before the slice ends, not only on the slice's
+ *      literal last day.
+ *
+ * Both layers only ever narrow eligibility or force OFF sooner — they never
+ * turn an illegal candidate legal, and they stack with (never replace) every
+ * check above: a day goes OFF if ANY forcing condition or empty-eligible-set
+ * condition says so.
  */
 
 import type { GeneratedPairing, PairingLegResult } from '../pairing/types';
@@ -103,6 +135,19 @@ const MAX_CONSECUTIVE_DUTY_DAYS = 7;
 const TARGET_DAYS_OFF_PER_MONTH = 8;
 /** From this day of the month onward, bias remaining days toward OFF if the days-off pace is behind target. */
 const PACING_CHECK_FROM_DAY = 24;
+/** Sequential (not calendar-ISO) week-slice length for weekly pacing — see docs/roster-gen-assumptions.md item 21. */
+const WEEK_SLICE_LENGTH_DAYS = 7;
+/**
+ * How far over its own soft weekly block-minutes slice a week is allowed to
+ * run before a candidate is filtered out (docs item 21). 50% was chosen so a
+ * single legitimately large pairing (this codebase's synthetic/real pairings
+ * commonly run to ~1000-1700 block-min for a 3-4 day trip) can still be
+ * absorbed by one week without permanently blocking that week's every
+ * candidate, while still capping any one week to at most 1.5x an even
+ * month-wide split — nowhere near enough to reproduce the diagnosed
+ * whole-budget-in-2-weeks failure mode.
+ */
+const WEEKLY_BLOCK_TOLERANCE_FRACTION = 0.5;
 
 function isoDate(year: number, month: number, day: number): string {
   return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10);
@@ -362,6 +407,74 @@ function filterCandidatesWithinBudget(
   );
 }
 
+/** How many sequential 7-day-from-day-1 week slices a month divides into (docs item 21) — the last slice may be shorter than 7 days. */
+function numberOfWeekSlices(daysInMonth: number): number {
+  return Math.ceil(daysInMonth / WEEK_SLICE_LENGTH_DAYS);
+}
+
+/** 0-based [start0, end0] day-index bounds (inclusive) of the week slice containing `dayIndex0` (docs item 21). */
+function weekSliceBoundsForDay(
+  dayIndex0: number,
+  daysInMonth: number
+): { start0: number; end0: number } {
+  const start0 = Math.floor(dayIndex0 / WEEK_SLICE_LENGTH_DAYS) * WEEK_SLICE_LENGTH_DAYS;
+  const end0 = Math.min(daysInMonth - 1, start0 + WEEK_SLICE_LENGTH_DAYS - 1);
+  return { start0, end0 };
+}
+
+/**
+ * This week slice's own OFF-day target (docs item 21), scaled to the
+ * slice's own length (`TARGET_DAYS_OFF_PER_MONTH * sliceLengthDays /
+ * daysInMonth`, rounded) rather than a flat `TARGET_DAYS_OFF_PER_MONTH /
+ * numberOfWeekSlices` split — a flat split would hold a short trailing
+ * remainder slice (e.g. 2-3 days) to the same target as a full 7-day slice,
+ * which for `TARGET_DAYS_OFF_PER_MONTH = 8` over ~5 slices rounds to 2 and
+ * would force the ENTIRE remainder slice OFF regardless of legality or
+ * budget headroom — clamped to `[0, sliceLengthDays]` as a final safety net
+ * regardless of which formula is used.
+ */
+function targetOffDaysForWeekSlice(
+  sliceLengthDays: number,
+  daysInMonth: number
+): number {
+  const raw = Math.round((TARGET_DAYS_OFF_PER_MONTH * sliceLengthDays) / daysInMonth);
+  return Math.max(0, Math.min(sliceLengthDays, raw));
+}
+
+/**
+ * Additional (never a replacement for) weekly eligibility filter alongside
+ * `filterCandidatesWithinBudget`, active only when `targetBlockMinutesMax`
+ * is set (docs item 21). Returns only candidates that would not push the
+ * CURRENT week slice's own running block-minute total past its soft slice
+ * plus `WEEKLY_BLOCK_TOLERANCE_FRACTION` tolerance. `weeklyBlockSliceMinutes
+ * === undefined` means no weekly budget filtering (mirrors
+ * `filterCandidatesWithinBudget`'s own unset-ceiling behavior).
+ *
+ * EXCEPTION: when `weeklyBlockMinutesSoFar === 0` (nothing accepted in this
+ * week slice yet), this filter is a no-op — the month-level filter above
+ * remains the sole gate. Without this, a tight month-level budget spread
+ * over several week slices can produce a weekly slice smaller than a single
+ * real pairing's own block time (e.g. a 1400-min month ceiling over 5 weeks
+ * is a 280-min/week slice, smaller than almost any real pairing), which
+ * would incorrectly block even a week's very first, otherwise-legal pick —
+ * starving the month of flying it could easily afford, not "pacing" it. The
+ * whole point of weekly pacing is to stop one week from absorbing SEVERAL
+ * pairings' worth of budget that other weeks then go without — it was never
+ * meant to block a week's first pairing outright.
+ */
+function filterCandidatesWithinWeeklyBudget(
+  candidates: GeneratedPairing[],
+  weeklyBlockMinutesSoFar: number,
+  weeklyBlockSliceMinutes: number | undefined
+): GeneratedPairing[] {
+  if (weeklyBlockSliceMinutes == null) return candidates;
+  if (weeklyBlockMinutesSoFar === 0) return candidates;
+  const weeklyCeiling = weeklyBlockSliceMinutes * (1 + WEEKLY_BLOCK_TOLERANCE_FRACTION);
+  return candidates.filter(
+    (candidate) => weeklyBlockMinutesSoFar + pairingBlockMinutes(candidate) <= weeklyCeiling
+  );
+}
+
 /**
  * Orders one day's ALREADY-budget-filtered eligible candidates for the
  * construction loop below, per `input.generationStrategy`'s doc comment
@@ -439,10 +552,29 @@ export function generateMonthlyRoster(
   let runningBlockMinutesSoFar = 0;
   const haulTypeCountsSoFar: Record<HaulType, number> = { SHORT: 0, MEDIUM: 0, LONG: 0 };
 
+  const numSlices = numberOfWeekSlices(daysInMonth);
+  const weeklyBlockSliceMinutes =
+    targetBlockMinutesMax == null ? undefined : targetBlockMinutesMax / numSlices;
+  let currentWeekSliceStart0 = -1; // sentinel — forces a reset on the first iteration
+  let weeklyBlockMinutesSoFar = 0;
+  let weeklyOffDaysSoFar = 0;
+
   while (dayIndex0 < daysInMonth) {
     const date = dates[dayIndex0];
     const consecutiveDutyDaysBefore = countConsecutiveDutyDaysAtEnd(days);
     const remainingDaysInMonth = daysInMonth - dayIndex0;
+
+    const { start0: sliceStart0, end0: sliceEnd0 } = weekSliceBoundsForDay(dayIndex0, daysInMonth);
+    if (sliceStart0 !== currentWeekSliceStart0) {
+      currentWeekSliceStart0 = sliceStart0;
+      weeklyBlockMinutesSoFar = 0;
+      weeklyOffDaysSoFar = 0;
+    }
+    const sliceLengthDays = sliceEnd0 - sliceStart0 + 1;
+    const remainingDaysInSlice = sliceEnd0 - dayIndex0 + 1;
+    const weeklyTargetOffDays = targetOffDaysForWeekSlice(sliceLengthDays, daysInMonth);
+    const weeklyStillNeededOff = Math.max(0, weeklyTargetOffDays - weeklyOffDaysSoFar);
+    const forcedOffByWeeklyPacing = weeklyStillNeededOff >= remainingDaysInSlice;
 
     const stillNeeded = Math.max(0, TARGET_DAYS_OFF_PER_MONTH - daysOffSoFar);
     const forcedOffByPacing =
@@ -452,12 +584,17 @@ export function generateMonthlyRoster(
 
     let assignedPairing: GeneratedPairing | null = null;
 
-    if (!forcedOffByPacing && !forcedOffByConsecutiveCap) {
+    if (!forcedOffByPacing && !forcedOffByConsecutiveCap && !forcedOffByWeeklyPacing) {
       const candidates = candidatesByStart.get(date) ?? [];
-      const eligibleCandidates = filterCandidatesWithinBudget(
+      const monthBudgetFiltered = filterCandidatesWithinBudget(
         candidates,
         runningBlockMinutesSoFar,
         targetBlockMinutesMax
+      );
+      const eligibleCandidates = filterCandidatesWithinWeeklyBudget(
+        monthBudgetFiltered,
+        weeklyBlockMinutesSoFar,
+        weeklyBlockSliceMinutes
       );
       const orderedCandidates = orderCandidatesByStrategy(
         eligibleCandidates,
@@ -467,6 +604,20 @@ export function generateMonthlyRoster(
       for (const candidate of orderedCandidates) {
         if (dayIndex0 + candidate.tripDays > daysInMonth) continue; // wouldn't fit in the month
         if (consecutiveDutyDaysBefore + candidate.tripDays > MAX_CONSECUTIVE_DUTY_DAYS) continue;
+        // Would this multi-day candidate itself consume enough of the
+        // CURRENT week slice's remaining days that the slice's own
+        // days-off target becomes unreachable afterward? Without this
+        // guard, a pairing accepted here could span straight past the
+        // single day where `forcedOffByWeeklyPacing` would otherwise have
+        // fired later this same slice — the day-level check above only
+        // ever runs at whichever day the loop's cursor actually lands on,
+        // and a multi-day pairing's own span is never individually
+        // revisited (docs item 21).
+        const remainingDaysInSliceAfterCandidate = Math.max(
+          0,
+          remainingDaysInSlice - candidate.tripDays
+        );
+        if (remainingDaysInSliceAfterCandidate < weeklyStillNeededOff) continue;
 
         const candidateDays = buildCandidateDays(candidate, dates, dayIndex0);
         const hypothetical = [...days, ...candidateDays];
@@ -481,6 +632,7 @@ export function generateMonthlyRoster(
           days.push(...candidateDays);
           dayIndex0 += candidate.tripDays;
           runningBlockMinutesSoFar += pairingBlockMinutes(candidate);
+          weeklyBlockMinutesSoFar += pairingBlockMinutes(candidate);
           haulTypeCountsSoFar[classifyHaulType(candidate)] += 1;
           break;
         }
@@ -490,6 +642,7 @@ export function generateMonthlyRoster(
     if (!assignedPairing) {
       days.push({ date, assignment: { type: 'OFF' } });
       daysOffSoFar += 1;
+      weeklyOffDaysSoFar += 1;
       dayIndex0 += 1;
     }
   }

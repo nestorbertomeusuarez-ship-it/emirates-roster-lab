@@ -50,6 +50,18 @@ per-pilot acclimatisation tracking.
 
 ## 3. Construction heuristics are the generator's own, not new GCAA numbers
 
+**EXTENDED by item 21 — `TARGET_DAYS_OFF_PER_MONTH`'s pacing is no longer
+checked at month-scope only.** `PACING_CHECK_FROM_DAY`'s month-level
+reactive check (below) still exists unchanged, but item 21 adds an
+ADDITIONAL, narrower per-week-slice version of the same days-off pacing
+idea, because the month-level-only version let a purely day-by-day greedy
+walk spend an entire block-hours budget in the first 2-3 weeks, forcing
+every remaining day of the month OFF as one giant tail (diagnosed against
+the user's real live October 2026 roster). `CONSECUTIVE_DUTY_DAYS_SOFT_CAP`
+is untouched by item 21. This note is preserved per this doc's own
+update-don't-delete convention (see item #10's precedent) — the original
+text below is unchanged.
+
 `generateMonthlyRoster.ts` uses three tunable constants that are this
 generator's *own* scheduling heuristics, not additional regulatory values:
 
@@ -597,6 +609,19 @@ above):**
 
 ## 20. Hard `targetBlockMinutesMax` ceiling + haul-type MIX/MAX_FLYING/MAX_DAYS_OFF selectable strategy (supersedes item 19)
 
+**EXTENDED by item 21 — the hard ceiling below is still exactly correct at
+MONTH scope, but was not sufficient on its own.** A purely day-by-day walk
+enforcing only a month-level ceiling can still legally spend the ENTIRE
+budget in the first 2-3 weeks (nothing below stops it), forcing a giant
+end-of-month OFF tail once the budget runs out — this is exactly what was
+diagnosed against the user's real live October 2026 roster (10 consecutive
+OFF days, days 22-31). Item 21 adds an ADDITIONAL, narrower weekly-slice
+budget layer on top of (never instead of) the month-level ceiling described
+below, which remains completely unchanged and still authoritative at month
+scope. This note is preserved per this doc's own update-don't-delete
+convention (see item #10's precedent) — the original text below is
+unchanged.
+
 Direct user feedback, verbatim (translated): *"Between 80 and 90 [hours],
 let it leave an OFF day if necessary. The goal shouldn't be assigning the
 maximum number of flights, but a MIX between short-haul, medium-haul, and
@@ -696,3 +721,160 @@ name/value pair): "Max flying" (`MAX_FLYING`), "Max days off"
 currently in those two inputs. The confirm-before-overwrite form carries
 the chosen `strategy` through a hidden field, matching the existing
 min/max pattern exactly.
+
+## 21. Weekly-block pacing (extends items 3 and 20): the construction loop paces in ~7-day slices, not just day-by-day
+
+Direct user feedback, verbatim (translated): *"The blocks of days off
+shouldn't be so concentrated, I don't like the day-by-day scheduling
+method, you have to think in weekly, monthly blocks."* Diagnosed root
+cause, confirmed against the user's real live October 2026 roster
+(`FFFFFFOFFFFFFOFFFFFFOOOOOOOOOOO` — days 1-20 reasonably paced, days
+22-31, 10 consecutive days, ALL off): item 20's hard `targetBlockMinutesMax`
+ceiling is completely correct at MONTH scope, but a purely day-by-day
+greedy walk enforcing only a month-level ceiling can legally spend the
+ENTIRE budget in the first 2-3 weeks — nothing in items 3 or 20 stops it —
+forcing every remaining day of the month OFF once the budget runs out, not
+because of any days-off pacing logic, but simply because the month "ran out
+of money" partway through. This item adds pacing WITHIN the month, not a
+relitigation of the hard ceiling itself (kept exactly as-is).
+
+### Week slices: simple sequential 7-day buckets, not calendar ISO weeks
+
+`generateMonthlyRoster.ts#numberOfWeekSlices`/`#weekSliceBoundsForDay`
+divide the month into `Math.ceil(daysInMonth / 7)` sequential slices
+starting from day 1 (days 1-7, 8-14, 15-21, 22-28, remainder) — plain
+7-day-from-day-1 buckets, not Mon-Sun calendar weeks, kept deliberately
+simple and month-agnostic (a 28/29/30/31-day month all divide the same way,
+with only the LAST slice ever being shorter than 7 days).
+
+### Layer 1 — weekly block-budget pacing (`filterCandidatesWithinWeeklyBudget`)
+
+Active only when `targetBlockMinutesMax` is set. Each week slice gets its
+own soft slice, `targetBlockMinutesMax / numberOfWeekSlices` (flat
+division, matching the task's own suggested formula), plus a **50% tolerance**
+(`WEEKLY_BLOCK_TOLERANCE_FRACTION`): a candidate is filtered out if
+`weeklyBlockMinutesSoFar + candidateBlockMinutes` would exceed
+`weeklySlice * 1.5`. **Why 50%:** this codebase's synthetic and real
+pairings commonly run to roughly 1000-1700 block-minutes for a 3-4 day
+trip — a flat (untolerated) weekly slice would often be smaller than a
+SINGLE real pairing, permanently blocking that week's every candidate for
+no reason. 50% tolerance lets one legitimately large pairing be absorbed by
+a week without unblocking enough room for the ORIGINAL bug (an entire
+month's budget landing in 2-3 weeks) to reappear — a week is still capped
+at 1.5x an even month-wide split, nowhere close to 100% of a multi-week
+budget.
+
+**Exception — a week's own FIRST pick is never blocked by this filter**
+(`weeklyBlockMinutesSoFar === 0` short-circuits to a no-op, leaving the
+existing month-level `filterCandidatesWithinBudget` as the sole gate).
+Found and fixed during this item's own TDD process: a tight month-level
+budget spread over several week slices (e.g. a 1400-minute month ceiling
+over 5 weeks is a 280-minute/week slice) can be smaller than almost any
+real pairing, and without this exception the weekly filter would
+incorrectly block even a week's very first, otherwise-legal pick —
+starving the month of flying it could easily afford, which is a REGRESSION
+of items 3/20's existing behavior, not "pacing." The whole point of this
+layer is to stop one week from absorbing SEVERAL pairings' worth of budget
+that other weeks then go without; it was never meant to block a week's
+first pairing outright. This exception is confirmed by
+`generateMonthlyRoster.test.ts`'s pre-existing `targetBlockMinutesMax`
+enforcement suite (a 1400-min budget must still accept exactly one 1000-min
+pairing).
+
+### Layer 2 — weekly days-off pacing
+
+Independent of `targetBlockMinutesMax` (always active, exactly like the
+existing month-level `TARGET_DAYS_OFF_PER_MONTH`/`PACING_CHECK_FROM_DAY`
+pacing it extends). Each week slice gets its own OFF-day target,
+`targetOffDaysForWeekSlice`: `TARGET_DAYS_OFF_PER_MONTH` scaled to the
+SLICE'S OWN LENGTH (`round(TARGET_DAYS_OFF_PER_MONTH * sliceLengthDays /
+daysInMonth)`, clamped to `[0, sliceLengthDays]`) — deliberately NOT a flat
+`TARGET_DAYS_OFF_PER_MONTH / numberOfWeekSlices` split (the brief's own
+suggested starting formula), because a flat split holds a short trailing
+remainder slice (e.g. a 2-3-day final slice in a 30/31-day month) to the
+SAME target as a full 7-day slice — for `TARGET_DAYS_OFF_PER_MONTH = 8`
+over ~5 slices that rounds to 2, which would force the ENTIRE remainder
+slice OFF regardless of legality or budget headroom. Scaling by the slice's
+own length is this item's own "rounded sensibly" judgment call (the task
+brief explicitly invited this).
+
+Exactly like the existing month-level `PACING_CHECK_FROM_DAY` check, this
+forces OFF as soon as it becomes mathematically necessary to still hit the
+slice's own target before the slice ends (`weeklyStillNeededOff >=
+remainingDaysInSlice`), not only on the slice's literal last day — same
+formula shape as the month-level check, just re-scoped to the current week
+slice instead of the whole month's tail.
+
+**A second, narrower guard was needed and added during TDD.** The day-level
+check above only ever runs at whichever day the loop's cursor actually
+lands on; a multi-day candidate accepted EARLIER in the same slice can span
+straight past the single day where the day-level check would otherwise
+have fired later that slice, silently skipping it and leaving a week with
+zero OFF days despite the pacing target existing. Fixed with an additional
+per-candidate guard in the construction loop's inner accept path: a
+candidate is skipped if accepting it would leave fewer days remaining in
+the CURRENT slice than `weeklyStillNeededOff` still requires
+(`max(0, remainingDaysInSlice - candidate.tripDays) < weeklyStillNeededOff`).
+Found via this item's own acceptance test (`buildFixturePairings`'s mixed
+1/2/3-day routes reproduced exactly this gap against week slice 1) — not
+theoretical.
+
+### Stacking, not replacement
+
+Per the task's own explicit requirement: both layers only ever narrow
+eligibility or force OFF sooner — they can never turn an illegal candidate
+legal, and they can never remove the existing month-level hard ceiling or
+`CONSECUTIVE_DUTY_DAYS_SOFT_CAP` check. A day goes OFF if ANY forcing
+condition (month-level pacing, the consecutive-duty-day cap, weekly
+days-off pacing) says so, or if the candidate pool is left empty after
+BOTH the month-level and weekly block-budget filters run — exactly the
+same "one more independent reason a day might go OFF" pattern items 3 and
+20 already established, not new OFF-handling machinery.
+
+### Verification
+
+`generateMonthlyRoster.test.ts` gained: a weekly block-budget spread test
+(a single dominant 1000-block-min/3-day route with a 4000-min month
+ceiling — the OLD day-by-day-only pacing spends the whole budget by day 14,
+confirmed via a real pre-fix RED run of this exact test; the NEW code
+spreads it across 4 of 5 week slices, `< 4000` block-minutes started in the
+first two weeks); a weekly days-off floor test (no week slice ends with
+zero OFF days, using the multi-route `buildFixturePairings` fixture —
+confirmed pre-fix RED on week slice 1 specifically, tracing to the
+mid-pairing-skip gap above); the core acceptance test reproducing the
+diagnosed real-world failure mode at reduced scale (single-route fixture,
+90h month ceiling — the OLD code's longest OFF run for this exact fixture
+is 13 consecutive days, confirmed via a real pre-fix RED run; the NEW code
+brings it to **6** consecutive days, asserted `<= 7`); and an
+`it.each(['MIX','MAX_FLYING','MAX_DAYS_OFF'])` regression sweep confirming
+zero RED, the 7-consecutive-duty-day cap, and the `>=7`-days-off floor all
+still hold with weekly pacing active, combined with the existing 80-90h
+hard range. All 22 pre-existing tests in this file continued to pass
+unmodified — weekly pacing only ever adds forced-OFF opportunities or
+narrows eligibility, it never relaxes anything those tests already assert.
+
+**Real Oct 2026 regeneration (this session, live `generateRosterAction`
+POST, A350, MIX strategy, 80-90h range).** Pattern (F=flight/continuation,
+O=off, one char per day 1-31):
+
+```
+FFFFFOOFFFFOOFFFFFOOFFFFFFOOFFO
+```
+
+Longest consecutive OFF run: **2 days** (down from the pre-fix diagnosis's
+10-day end-of-month tail). 22 flight days, 9 DXB days off, 9 pairings
+assigned, 4380 total block minutes (73h00m — under the 80h floor, an
+accepted outcome per item 20's own explicit priority: the hard ceiling and
+weekly pacing narrow eligibility, they never force a candidate to exist
+where a legal/paced one doesn't), zero RED evaluations. Confirms weekly
+pacing fixes the diagnosed real-world failure mode on the actual live data
+it was diagnosed against, not just the synthetic test fixtures above.
+
+### Wiring
+
+No new `GenerateMonthlyRosterInput` field was needed — this is purely an
+internal construction-loop refinement, derived entirely from the existing
+`targetBlockMinutesMax` (layer 1) and the existing
+`TARGET_DAYS_OFF_PER_MONTH` constant (layer 2). Nothing downstream
+(`src/roster-gen/db/rosterGen.ts`, `actions.ts`, the generation form) needed
+any change — every existing caller gets weekly pacing automatically.

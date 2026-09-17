@@ -498,3 +498,145 @@ describe('generateMonthlyRoster — no candidates available', () => {
     expect(result.summary.flightDays).toBe(0);
   });
 });
+
+/**
+ * Sequential 7-day-from-day-1 week slices (NOT calendar ISO weeks — see
+ * docs/roster-gen-assumptions.md item 21), duplicated here only for test
+ * assertions (the production helper of the same shape lives, unexported, in
+ * generateMonthlyRoster.ts).
+ */
+function weekSliceIndexOfDayIndex0(dayIndex0: number): number {
+  return Math.floor(dayIndex0 / 7);
+}
+
+function longestConsecutiveOffRun(days: ReturnType<typeof generateMonthlyRoster>['days']): number {
+  let run = 0;
+  let maxRun = 0;
+  for (const day of days) {
+    if (day.assignment.type === 'OFF') {
+      run += 1;
+      maxRun = Math.max(maxRun, run);
+    } else {
+      run = 0;
+    }
+  }
+  return maxRun;
+}
+
+describe('generateMonthlyRoster — weekly block-budget pacing (docs item 21)', () => {
+  it('spreads block-minute acceptance across more weeks instead of front-loading the whole budget into the first 2 weeks', () => {
+    // Single 1000-block-min/3-day route, available almost every day, no
+    // smaller legal alternative exists on any day (mirrors
+    // buildSingleRoutePairings above). With a 4000-min month ceiling, the
+    // OLD day-by-day-only pacing greedily fills the budget as fast as
+    // legality/consecutive-duty-cap allow — entirely within the first 2
+    // weeks (4 pairings * 1000 = 4000 by day 14, see this module's own
+    // hand-traced math in the task brief). Weekly pacing must spread that
+    // same 4000-min budget across at least 3 of the month's week slices
+    // instead.
+    const pairings = buildSingleRoutePairings('A350');
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+      targetBlockMinutesMax: 4000,
+    });
+
+    const blockMinutesStartedInFirstTwoWeeks = result.days
+      .slice(0, 14)
+      .filter((d) => d.assignment.type === 'FLIGHT' && d.assignment.dayOfPairing === 1)
+      .reduce((sum, d) => {
+        const pairing = (d.assignment as { pairing: GeneratedPairing }).pairing;
+        return sum + pairing.legs.reduce((s, l) => s + l.instance.blockTimeMin, 0);
+      }, 0);
+    expect(blockMinutesStartedInFirstTwoWeeks).toBeLessThan(4000);
+
+    const weeksWithAnyFlight = new Set<number>();
+    result.days.forEach((d, idx) => {
+      if (d.assignment.type === 'FLIGHT') weeksWithAnyFlight.add(weekSliceIndexOfDayIndex0(idx));
+    });
+    expect(weeksWithAnyFlight.size).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('generateMonthlyRoster — weekly days-off pacing (docs item 21)', () => {
+  it('never lets a week-slice end with zero OFF days when enough legal OFF-forcing opportunities exist', () => {
+    const pairings = buildFixturePairings('A350');
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+    });
+
+    const offCountByWeek = new Map<number, number>();
+    result.days.forEach((d, idx) => {
+      const week = weekSliceIndexOfDayIndex0(idx);
+      if (d.assignment.type === 'OFF') {
+        offCountByWeek.set(week, (offCountByWeek.get(week) ?? 0) + 1);
+      } else if (!offCountByWeek.has(week)) {
+        offCountByWeek.set(week, 0);
+      }
+    });
+
+    for (const [week, offCount] of offCountByWeek.entries()) {
+      expect(offCount, `week slice ${week} had zero OFF days`).toBeGreaterThanOrEqual(1);
+    }
+  });
+});
+
+describe('generateMonthlyRoster — no giant end-of-month OFF tail (core acceptance test, docs item 21)', () => {
+  it('keeps the longest consecutive OFF run well below the 10-day tail diagnosed against the real Oct 2026 roster', () => {
+    // Reproduces the diagnosed real-world failure mode: a single dominant
+    // route (1000 block-min/3-day trip) available almost daily, with a
+    // month-level ceiling (5400 = 90h) the OLD day-by-day-only pacing
+    // exhausts by ~day 17-18 (see hand-traced math in the task brief),
+    // leaving the entire remainder of the month forced OFF as one giant
+    // tail (13 days under the old logic for this exact fixture).
+    const pairings = buildSingleRoutePairings('A350');
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+      targetBlockMinutesMax: 90 * 60,
+    });
+
+    const longestRun = longestConsecutiveOffRun(result.days);
+    expect(longestRun).toBeLessThanOrEqual(7);
+
+    const reds = result.evaluations.filter((e) => e.evaluation.severity === 'RED');
+    expect(reds).toEqual([]);
+    assertNeverExceedsSevenConsecutiveDutyDays(result.days);
+  });
+});
+
+describe('generateMonthlyRoster — weekly pacing preserves existing invariants', () => {
+  it.each<GenerationStrategy>(['MIX', 'MAX_FLYING', 'MAX_DAYS_OFF'])(
+    '%s: zero RED, 7-consecutive-duty-day cap, and the >=7-days-off floor all still hold with weekly pacing active',
+    (strategy) => {
+      const pairings = buildFixturePairings('A350');
+      const result = generateMonthlyRoster({
+        fleetType: 'A350',
+        year: YEAR,
+        month: MONTH,
+        pairings,
+        airportTimeZones: AIRPORT_TZS,
+        generationStrategy: strategy,
+        targetBlockMinutesMin: 80 * 60,
+        targetBlockMinutesMax: 90 * 60,
+      });
+
+      const reds = result.evaluations.filter((e) => e.evaluation.severity === 'RED');
+      expect(reds).toEqual([]);
+      expect(result.summary.totalBlockMinutes).toBeLessThanOrEqual(90 * 60);
+      assertNeverExceedsSevenConsecutiveDutyDays(result.days);
+      const offCount = result.days.filter((d) => d.assignment.type === 'OFF').length;
+      expect(offCount).toBeGreaterThanOrEqual(7);
+    }
+  );
+});
