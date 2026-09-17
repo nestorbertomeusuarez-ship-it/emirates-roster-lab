@@ -54,12 +54,7 @@ function formatMinutes(minutes: number): string {
 interface RosterMonthPageProps {
   params: Promise<{ year: string; month: string }>;
   searchParams: Promise<{
-    genConfirm?: string;
-    genExisting?: string;
     genSummary?: string;
-    targetBlockHoursMin?: string;
-    targetBlockHoursMax?: string;
-    strategy?: string;
   }>;
 }
 
@@ -104,17 +99,6 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
   }
 
   const genSummary = parseGenSummary(sp.genSummary);
-  const genConfirmFleet = sp.genConfirm;
-  const genExistingCount = sp.genExisting ? Number(sp.genExisting) : 0;
-  // Carried through the confirm-before-overwrite redirect exactly like
-  // genConfirm/genExisting (see actions.ts#generateRosterAction) so a
-  // confirmed overwrite doesn't lose the chosen target block hours range.
-  const genConfirmTargetBlockHoursMin = sp.targetBlockHoursMin ?? '';
-  const genConfirmTargetBlockHoursMax = sp.targetBlockHoursMax ?? '';
-  // Carried through the confirm-before-overwrite redirect exactly like the
-  // min/max fields above (see actions.ts#generateRosterAction) so a
-  // confirmed overwrite doesn't lose the chosen generation strategy.
-  const genConfirmStrategy = sp.strategy ?? 'MIX';
 
   const rosterMonth = await getOrCreateRosterMonth(prisma, year, month);
   const entries = await listRosterEntries(prisma, rosterMonth.id);
@@ -260,30 +244,14 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
           </div>
         )}
 
-        {genConfirmFleet && (
-          <form action={generateRosterAction} className="mb-2 flex flex-wrap items-center gap-2">
-            <span>
-              This month already has {genExistingCount} assigned day
-              {genExistingCount === 1 ? '' : 's'}. Generating a {genConfirmFleet} roster will
-              overwrite them.
-            </span>
-            <input type="hidden" name="year" value={year} />
-            <input type="hidden" name="month" value={month} />
-            <input type="hidden" name="fleetType" value={genConfirmFleet} />
-            <input type="hidden" name="confirm" value="true" />
-            <input type="hidden" name="targetBlockHoursMin" value={genConfirmTargetBlockHoursMin} />
-            <input type="hidden" name="targetBlockHoursMax" value={genConfirmTargetBlockHoursMax} />
-            <input type="hidden" name="strategy" value={genConfirmStrategy} />
-            <button type="submit" className="border rounded px-2 py-0.5 bg-red-600 text-white">
-              Generate anyway (overwrite)
-            </button>
-          </form>
-        )}
-
+        {/* Direct user feedback (2026-09-17): "no hay necesidad de
+            confirmar el 'nuevo roster overwrite'" — removed the
+            confirm-before-overwrite step entirely (see actions.ts's own
+            doc comment and docs/roster-gen-assumptions.md item 9, now
+            superseded). Generation always proceeds immediately. */}
         <form action={generateRosterAction} className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="year" value={year} />
           <input type="hidden" name="month" value={month} />
-          <input type="hidden" name="confirm" value="false" />
           <label className="flex items-center gap-1">
             Fleet:
             <select name="fleetType" className="border rounded" defaultValue="A350">
@@ -338,7 +306,7 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
             type="submit"
             name="strategy"
             value="MAX_FLYING"
-            className="border rounded px-2 py-0.5"
+            className="border rounded px-2 py-0.5 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800"
           >
             Max flying
           </button>
@@ -346,7 +314,7 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
             type="submit"
             name="strategy"
             value="MAX_DAYS_OFF"
-            className="border rounded px-2 py-0.5"
+            className="border rounded px-2 py-0.5 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800"
           >
             Max days off
           </button>
@@ -354,7 +322,7 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
             type="submit"
             name="strategy"
             value="MIX"
-            className="border rounded px-2 py-0.5 bg-black text-white dark:bg-white dark:text-black"
+            className="border rounded px-2 py-0.5 cursor-pointer bg-black text-white dark:bg-white dark:text-black hover:opacity-80"
           >
             Generate roster
           </button>

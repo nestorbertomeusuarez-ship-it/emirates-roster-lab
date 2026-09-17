@@ -72,14 +72,6 @@ export async function buildMonthlyRosterForFleet(
   });
 }
 
-/** Returns how many RosterEntry rows already exist for a month (used by the UI's confirm-before-overwrite step). */
-export async function countExistingRosterEntries(
-  prisma: PrismaClient,
-  rosterMonthId: string
-): Promise<number> {
-  return prisma.rosterEntry.count({ where: { rosterMonthId } });
-}
-
 /**
  * Persists a generated result as RosterEntry rows for the month, REPLACING
  * whatever was there before (manual or a previous generation). The caller

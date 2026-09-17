@@ -115,11 +115,22 @@ click-to-assign constructor, which this generator does not replace.
 `src/roster-gen/db/rosterGen.ts#persistGeneratedRoster` deletes every
 existing `RosterEntry` row for the target month before writing the
 generated result — it does not attempt to merge with prior manual edits.
-The UI (`src/app/roster/[year]/[month]/actions.ts#generateRosterAction`)
-requires an explicit second confirmation before overwriting a month that
-already has entries (manual or a previous generation), per the task's
-instruction not to silently destroy manual work — but once confirmed, the
-replacement is total.
+The replacement is always total.
+
+**Confirm-before-overwrite REMOVED (2026-09-17, direct user feedback: "no
+hay necesidad de confirmar el 'nuevo roster overwrite'").** The UI
+originally required an explicit second confirmation click before
+overwriting a month that already had entries. In practice, once a pilot
+is iterating on a real month (which this session did repeatedly — 5
+regenerations in one day, tuning the block-hours target and strategy),
+that confirmation fires on nearly every generate and just adds friction;
+it also made the 3 strategy buttons (`src/app/roster/[year]/[month]/page.tsx`)
+feel unresponsive, since clicking one redirected to a generic "overwrite?"
+prompt instead of immediately regenerating. `generateRosterAction` now
+always proceeds immediately and replaces the whole month — the "no
+silent destruction of manual work" concern this item originally recorded
+no longer applies as a UI safeguard; the total-replacement *semantics*
+above are unchanged, only the confirmation gate in front of them is gone.
 
 ## 10. Compliance-flag detail is summarized, not itemized, in the UI
 

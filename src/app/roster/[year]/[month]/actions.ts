@@ -18,11 +18,7 @@ import {
 } from '@/pairing/db/roster';
 import { generatePairingsForMonth } from '@/pairing/db/pairings';
 import type { DutyType } from '@/pairing/types';
-import {
-  buildMonthlyRosterForFleet,
-  countExistingRosterEntries,
-  persistGeneratedRoster,
-} from '@/roster-gen/db/rosterGen';
+import { buildMonthlyRosterForFleet, persistGeneratedRoster } from '@/roster-gen/db/rosterGen';
 import type { GenerationStrategy } from '@/roster-gen/types';
 
 const GENERATION_STRATEGIES: readonly GenerationStrategy[] = ['MIX', 'MAX_FLYING', 'MAX_DAYS_OFF'];
@@ -139,42 +135,30 @@ export async function clearDutyAction(formData: FormData): Promise<void> {
 }
 
 /**
- * Automatic monthly roster generation (Phase 4). Two-step confirm: if the
- * month already has RosterEntry rows (manual or a previous generation) and
- * the caller hasn't confirmed yet, redirects back with query params the
- * page reads to render a "this will overwrite N entries" confirmation
- * form (see page.tsx) instead of silently destroying existing work.
+ * Automatic monthly roster generation (Phase 4).
+ *
+ * Direct user feedback (2026-09-17): "no hay necesidad de confirmar el
+ * 'nuevo roster overwrite'" — this used to require an explicit second
+ * confirmation click before overwriting a month that already had entries
+ * (see docs/roster-gen-assumptions.md item 9, now superseded there). That
+ * extra step also made the 3 strategy buttons feel unresponsive: clicking
+ * any of them when the month already had entries (which, in practice, it
+ * almost always does once you're iterating on a real roster) redirected to
+ * a generic "overwrite?" prompt instead of immediately regenerating, which
+ * read as the buttons "doing nothing." Generation now always proceeds
+ * immediately and replaces the whole month — see
+ * `persistGeneratedRoster`'s own doc comment for why a full replace (not a
+ * merge) is still the correct semantics once you're past the confirm step.
  */
 export async function generateRosterAction(formData: FormData): Promise<void> {
   const year = Number(requireString(formData, 'year'));
   const month = Number(requireString(formData, 'month'));
   const fleetType = requireString(formData, 'fleetType');
-  const confirmed = formData.get('confirm') === 'true';
   const targetBlockMinutesMin = parseOptionalTargetBlockMinutes(formData, 'targetBlockHoursMin');
   const targetBlockMinutesMax = parseOptionalTargetBlockMinutes(formData, 'targetBlockHoursMax');
   const generationStrategy = parseGenerationStrategy(formData);
 
   const rosterMonth = await getOrCreateRosterMonth(prisma, year, month);
-  const existingCount = await countExistingRosterEntries(prisma, rosterMonth.id);
-
-  if (existingCount > 0 && !confirmed) {
-    // Carries the chosen target block hours range and strategy through the
-    // confirm-before-overwrite redirect the exact same way fleetType
-    // already is, so a confirmed overwrite doesn't lose it (see page.tsx's
-    // confirm form).
-    const targetBlockHoursMinParam =
-      targetBlockMinutesMin != null
-        ? `&targetBlockHoursMin=${encodeURIComponent(String(targetBlockMinutesMin / 60))}`
-        : '';
-    const targetBlockHoursMaxParam =
-      targetBlockMinutesMax != null
-        ? `&targetBlockHoursMax=${encodeURIComponent(String(targetBlockMinutesMax / 60))}`
-        : '';
-    const strategyParam = `&strategy=${encodeURIComponent(generationStrategy)}`;
-    redirect(
-      `/roster/${year}/${month}?genConfirm=${encodeURIComponent(fleetType)}&genExisting=${existingCount}${targetBlockHoursMinParam}${targetBlockHoursMaxParam}${strategyParam}`
-    );
-  }
 
   const result = await buildMonthlyRosterForFleet(
     prisma,
