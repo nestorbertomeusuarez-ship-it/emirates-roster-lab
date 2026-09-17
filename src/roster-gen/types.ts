@@ -98,13 +98,20 @@ export interface GenerateMonthlyRosterInput {
    *   degenerate case where a single available pairing's own block time
    *   already exceeds the entire configured range (nothing smaller exists
    *   to offer instead).
-   * - `targetBlockMinutesMin` is NOT enforced as a filter — it is purely
-   *   aspirational context for the human reading a generated summary. The
-   *   month can legitimately land under `targetBlockMinutesMin` at month
-   *   end if the combination of legality, pacing, and the hard
-   *   `targetBlockMinutesMax` ceiling simply doesn't allow reaching it —
-   *   this is an accepted outcome (per explicit user priority: "let it
-   *   leave an OFF day if necessary"), not an error condition.
+   * - `targetBlockMinutesMin` IS enforced, but only as a best-effort floor
+   *   (docs/roster-gen-assumptions.md item 23, superseding the
+   *   informational-only design below): while
+   *   `runningBlockMinutesSoFar < targetBlockMinutesMin`, this generator's
+   *   own cosmetic pacing/spacing heuristics (the weekly block-budget
+   *   filter, the weekly-pacing OFF trigger, and the natural-variation
+   *   streak extension) are suppressed so flying resumes wherever legally
+   *   possible. It never overrides an actual legality check, the
+   *   consecutive-duty-day cap, or the days-off pacing that proxies a real
+   *   GCAA floor — so the month can still legitimately land under
+   *   `targetBlockMinutesMin` if those leave no room, which remains an
+   *   accepted outcome, never an error. (Original text, preserved: it used
+   *   to be purely aspirational context for the human reading a generated
+   *   summary, with no effect on construction at all.)
    * - Both `undefined`: no budget filtering at all — every day's eligible
    *   candidate set is just whatever is legal (matches pre-hard-range
    *   behavior when `targetBlockMinutesMax` is unset).

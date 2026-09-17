@@ -166,6 +166,48 @@
  * sequence — while both remain fully deterministic and reproducible for a
  * given fleet/year/month, per this generator's existing seeding discipline
  * (docs/roster-gen-assumptions.md item 7).
+ *
+ * ENFORCED MIN BLOCK-HOURS FLOOR (docs/roster-gen-assumptions.md item 23):
+ * `targetBlockMinutesMin` used to be purely informational (see the "HARD
+ * BLOCK-HOURS TARGET RANGE" section above) — a month could legitimately land
+ * under it if the day-by-day walk simply never needed to fly enough. Direct
+ * user feedback: force the month to land in the full `[min, max]` range
+ * whenever legally possible. `belowMinFloor` (`runningBlockMinutesSoFar <
+ * targetBlockMinutesMin`, recomputed every day) suppresses exactly the
+ * PURELY-COSMETIC pacing/spacing preferences this generator itself invented
+ * — never a legality check, and never the two heuristics that stand in for
+ * an actual GCAA days-off floor:
+ *
+ *   - Layer 1's weekly block-budget filter (`filterCandidatesWithinWeeklyBudget`)
+ *     is skipped while below the floor — its only purpose is stopping one
+ *     week from absorbing several weeks' worth of budget, which is exactly
+ *     what catching up on a floor needs to be allowed to do. The month-level
+ *     `targetBlockMinutesMax` filter (`filterCandidatesWithinBudget`) is
+ *     NEVER skipped — the hard ceiling stays hard regardless of the floor.
+ *   - Layer 2's weekly-pacing OFF trigger (`forcedOffByWeeklyPacing`) and the
+ *     natural-variation streak extension (`forcedOffByStreakExtension`, docs
+ *     item 22) are both suppressed while below the floor — an in-progress
+ *     weekly-pacing-triggered OFF streak is cut short and flying resumes the
+ *     moment a legal, budget-eligible candidate exists again.
+ *   - The multi-day-candidate weekly-slice-headroom guard inside the
+ *     construction loop (`remainingDaysInSliceAfterCandidate <
+ *     weeklyStillNeededOff`) is skipped for the same reason — it exists
+ *     solely to protect layer 2's own trigger, which is itself suppressed.
+ *
+ * Deliberately NEVER suppressed while below the floor: `forcedOffByPacing`
+ * (the month-level `TARGET_DAYS_OFF_PER_MONTH` check, approximating
+ * ORO.FTL.205.G's real days-off-per-28-days floor) and
+ * `forcedOffByConsecutiveCap` (margin below the real 7-consecutive-duty-day
+ * ceiling) — both are this generator's proxies for an actual GCAA legal
+ * minimum, not a cosmetic preference, so a block-hours floor never gets to
+ * override them. Even without that guard, the per-candidate `evaluateDuty()`
+ * RED screen remains the ultimate backstop: flying more days without
+ * reaching a real days-off floor would eventually surface as a RED
+ * evaluation and get rejected regardless. The floor is therefore always
+ * best-effort — never a guarantee — exactly like the pre-existing ceiling
+ * behavior it mirrors: if legality and the real days-off/duty-day floors
+ * leave no room, the month can still land under `targetBlockMinutesMin`,
+ * which remains an accepted outcome, never an error.
  */
 
 import type { GeneratedPairing, PairingLegResult } from '../pairing/types';
@@ -618,6 +660,7 @@ export function generateMonthlyRoster(
     pairings,
     airportTimeZones,
     operatorConfig,
+    targetBlockMinutesMin,
     targetBlockMinutesMax,
     generationStrategy = 'MIX',
   } = input;
@@ -685,10 +728,21 @@ export function generateMonthlyRoster(
     // Slack only ever pulls an ALREADY-still-needed trigger earlier
     // (`weeklyStillNeededOff > 0` guard) — see the module doc comment for
     // why this guard is required (docs item 22).
+    // Enforced min block-hours floor (docs item 23) — see the module doc
+    // comment's "ENFORCED MIN BLOCK-HOURS FLOOR" section. Suppresses only
+    // this generator's own cosmetic pacing/spacing heuristics (layer 1's
+    // weekly budget filter, layer 2's trigger, and item 22's streak
+    // extension) — never `forcedOffByPacing`/`forcedOffByConsecutiveCap`
+    // (this generator's proxies for a real GCAA days-off/duty-day floor)
+    // and never any `evaluateDuty()` legality screen.
+    const belowMinFloor =
+      targetBlockMinutesMin != null && runningBlockMinutesSoFar < targetBlockMinutesMin;
+
     const forcedOffByWeeklyPacing =
+      !belowMinFloor &&
       weeklyStillNeededOff > 0 &&
       weeklyStillNeededOff >= remainingDaysInSlice - sliceTriggerSlackDays;
-    const forcedOffByStreakExtension = offStreakExtensionRemainingDays > 0;
+    const forcedOffByStreakExtension = !belowMinFloor && offStreakExtensionRemainingDays > 0;
 
     const stillNeeded = Math.max(0, TARGET_DAYS_OFF_PER_MONTH - daysOffSoFar);
     const forcedOffByPacing =
@@ -713,7 +767,7 @@ export function generateMonthlyRoster(
       const eligibleCandidates = filterCandidatesWithinWeeklyBudget(
         monthBudgetFiltered,
         weeklyBlockMinutesSoFar,
-        weeklyBlockSliceMinutes
+        belowMinFloor ? undefined : weeklyBlockSliceMinutes
       );
       const orderedCandidates = orderCandidatesByStrategy(
         eligibleCandidates,
@@ -736,7 +790,7 @@ export function generateMonthlyRoster(
           0,
           remainingDaysInSlice - candidate.tripDays
         );
-        if (remainingDaysInSliceAfterCandidate < weeklyStillNeededOff) continue;
+        if (!belowMinFloor && remainingDaysInSliceAfterCandidate < weeklyStillNeededOff) continue;
 
         const candidateDays = buildCandidateDays(candidate, dates, dayIndex0);
         const hypothetical = [...days, ...candidateDays];

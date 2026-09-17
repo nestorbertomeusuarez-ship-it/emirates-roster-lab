@@ -756,3 +756,110 @@ describe('generateMonthlyRoster — natural OFF-block length variation (docs ite
     expect(second.evaluations).toEqual(first.evaluations);
   });
 });
+
+describe('generateMonthlyRoster — enforced min block-hours floor (docs item 23)', () => {
+  it('flies more (reaching closer to or past the floor) than the same fixture with no floor set', () => {
+    // Single dominant 1000-block-min/3-day route, no smaller legal
+    // alternative — the exact fixture item 21's "no giant tail" test uses.
+    // Without a floor, the weekly block-budget filter (layer 1) and weekly
+    // pacing trigger (layer 2) leave this fixture well under 70h. With the
+    // floor set, those two cosmetic heuristics are suppressed below it, so
+    // strictly more flying should happen for the identical candidate pool.
+    const pairingsNoFloor = buildSingleRoutePairings('A350');
+    const withoutFloor = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings: pairingsNoFloor,
+      airportTimeZones: AIRPORT_TZS,
+      targetBlockMinutesMax: 90 * 60,
+    });
+
+    const pairingsWithFloor = buildSingleRoutePairings('A350');
+    const withFloor = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings: pairingsWithFloor,
+      airportTimeZones: AIRPORT_TZS,
+      targetBlockMinutesMin: 70 * 60,
+      targetBlockMinutesMax: 90 * 60,
+    });
+
+    expect(withFloor.summary.totalBlockMinutes).toBeGreaterThan(
+      withoutFloor.summary.totalBlockMinutes
+    );
+    expect(withFloor.summary.totalBlockMinutes).toBeGreaterThanOrEqual(70 * 60);
+  });
+
+  it('never pushes the month past the hard max ceiling while catching up on the floor', () => {
+    const pairings = buildSingleRoutePairings('A350');
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+      targetBlockMinutesMin: 70 * 60,
+      targetBlockMinutesMax: 90 * 60,
+    });
+
+    expect(result.summary.totalBlockMinutes).toBeLessThanOrEqual(90 * 60);
+    const reds = result.evaluations.filter((e) => e.evaluation.severity === 'RED');
+    expect(reds).toEqual([]);
+  });
+
+  it('never overrides the consecutive-duty-day cap while below the floor', () => {
+    const pairings = buildSingleRoutePairings('A350');
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+      targetBlockMinutesMin: 70 * 60,
+      targetBlockMinutesMax: 90 * 60,
+    });
+
+    assertNeverExceedsSevenConsecutiveDutyDays(result.days);
+  });
+
+  it('leaves behavior unchanged when targetBlockMinutesMin is left unset', () => {
+    // Same fixture/inputs as item 21's own regression guard — confirms the
+    // new floor logic introduces no behavior change at all when the field
+    // this item reads is simply absent (`belowMinFloor` is always false).
+    const pairings = buildSingleRoutePairings('A350');
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+      targetBlockMinutesMax: 90 * 60,
+    });
+
+    expect(longestConsecutiveOffRun(result.days)).toBeLessThanOrEqual(7);
+    const reds = result.evaluations.filter((e) => e.evaluation.severity === 'RED');
+    expect(reds).toEqual([]);
+  });
+
+  it('is deterministic with the floor set — identical inputs produce byte-for-byte identical output', () => {
+    const pairings = buildSingleRoutePairings('A350');
+    const input = {
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+      targetBlockMinutesMin: 70 * 60,
+      targetBlockMinutesMax: 90 * 60,
+    };
+
+    const first = generateMonthlyRoster(input);
+    const second = generateMonthlyRoster(input);
+
+    expect(second.days).toEqual(first.days);
+    expect(second.summary).toEqual(first.summary);
+    expect(second.evaluations).toEqual(first.evaluations);
+  });
+});

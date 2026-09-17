@@ -272,16 +272,19 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
               // retyping) silently reverted to the unbiased default. This
               // app has exactly one user (see src/ftl/operatorConfig.ts's
               // own precedent for a hardcoded single-user default over
-              // settings infrastructure) — defaulting to 80-90 here means
+              // settings infrastructure) — defaulting to a range here means
               // every future generate keeps this target range unless
               // explicitly cleared. Refined the same day (still direct user
               // feedback) from a single open floor (defaultValue 85) to an
               // explicit min/max range after the floor overshot to 106h40m
               // in one real run, then again to a HARD max + selectable
               // haul-mix/flying/days-off strategy after a further overshoot
-              // to 102h20m — see docs/roster-gen-assumptions.md item 20.
-              defaultValue={80}
-              placeholder="e.g. 80"
+              // to 102h20m (docs item 20). Lowered from 80 to 70 once the
+              // min became an ENFORCED floor (docs item 23) and real
+              // generation runs were landing at 67-79h — 70 is reachable
+              // most months without starving legality/pacing to chase it.
+              defaultValue={70}
+              placeholder="e.g. 70"
               className="border rounded w-16"
             />
             to

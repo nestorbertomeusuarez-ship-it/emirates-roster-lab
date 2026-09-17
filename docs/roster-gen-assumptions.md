@@ -1006,3 +1006,78 @@ downstream (`src/roster-gen/db/rosterGen.ts`, `actions.ts`, the generation
 form) needed any change — every existing caller gets the natural variation
 automatically, with no new opt-out: per the user's own framing ("normal and
 likely," not a rule to toggle), this is not gated behind a new input field.
+
+## 23. Enforced min block-hours floor (supersedes `targetBlockMinutesMin`'s informational-only design in item 20): a best-effort floor, never a legality override
+
+Direct user feedback, verbatim: *"fuerza para que queden al menos entre 70
+y 90 block hours"* ("force it so it lands at least between 70 and 90 block
+hours"), sent right after a real read-only verification run against the
+live Oct 2026 schedule landed at 67.17h (A350) and 78.67h (A380) — both
+under the 80h `targetBlockMinutesMin` default at the time, which item 20
+had explicitly designed to be purely informational.
+
+**What changed**: `targetBlockMinutesMin` is now enforced, but strictly as
+a best-effort floor that suppresses only this generator's OWN invented
+pacing/spacing preferences — never a real legality check, and never the
+two heuristics that stand in for an actual GCAA days-off/duty-day floor.
+`belowMinFloor` (`runningBlockMinutesSoFar < targetBlockMinutesMin`,
+recomputed every day in the construction loop) suppresses:
+
+- Layer 1's weekly block-budget filter (`filterCandidatesWithinWeeklyBudget`,
+  item 21) — its only purpose is stopping one week from absorbing several
+  weeks' worth of budget, which is exactly what catching up on a floor
+  needs to be allowed to do.
+- Layer 2's weekly-pacing OFF trigger (`forcedOffByWeeklyPacing`, item 21)
+  and item 22's streak-length extension (`forcedOffByStreakExtension`) — an
+  in-progress weekly-pacing-triggered OFF streak is cut short and flying
+  resumes the moment a legal, budget-eligible candidate exists again.
+- The multi-day-candidate weekly-slice-headroom guard inside the
+  construction loop (`remainingDaysInSliceAfterCandidate <
+  weeklyStillNeededOff`) — it exists solely to protect layer 2's own
+  trigger, which is itself suppressed while below the floor.
+
+**Deliberately never suppressed**, even while below the floor:
+
+- The month-level `targetBlockMinutesMax` filter
+  (`filterCandidatesWithinBudget`) — the hard ceiling from item 20 stays
+  hard regardless of the floor; a floor never gets to push the month over
+  the ceiling.
+- `forcedOffByPacing` (the month-level `TARGET_DAYS_OFF_PER_MONTH` check)
+  and `forcedOffByConsecutiveCap` (margin below the real 7-consecutive-
+  duty-day ceiling) — both are this generator's proxies for an actual GCAA
+  legal minimum (ORO.FTL.205.G's days-off-per-28-days floor and the 7-day
+  consecutive-duty ceiling), not a cosmetic preference. A block-hours floor
+  never overrides a legality proxy.
+- Every `evaluateDuty()` RED screen — unchanged, and still the ultimate
+  backstop: even without the guards above, flying more without a real
+  days-off floor would eventually surface as a RED evaluation and get
+  rejected regardless of `belowMinFloor`.
+
+The floor is therefore always best-effort, exactly mirroring how the
+pre-existing ceiling already behaves in the opposite direction: if legality
+and the real days-off/duty-day floors leave no room, the month can still
+land under `targetBlockMinutesMin`, which remains an accepted outcome, not
+an error — the change is that this generator now tries measurably harder
+before accepting that outcome, instead of never trying at all.
+
+### Verification
+
+Re-ran the same read-only `buildMonthlyRosterForFleet` check (no
+persistence) against the real live Oct 2026 schedule with
+`targetBlockMinutesMin = 70h`, `targetBlockMinutesMax = 90h`, `MIX`: see
+this item's commit message for the exact before/after block-hour totals.
+Zero RED both fleets, `generateMonthlyRoster.test.ts` gained new coverage
+confirming (a) a fixture that would otherwise land under the floor reaches
+it once legally reachable, (b) the month-level hard ceiling is still never
+exceeded, (c) `forcedOffByPacing`/`forcedOffByConsecutiveCap`-driven OFF
+days are unaffected by the floor, and (d) determinism is preserved.
+
+### Wiring
+
+No new `GenerateMonthlyRosterInput` field — `targetBlockMinutesMin` already
+existed (item 20) and is now read inside `generateMonthlyRoster` itself
+instead of being passed through unused. The generation form's default
+range moved from 80-90h to 70-90h (`page.tsx`), reflecting that 70h is
+realistically reachable most months now that the floor is actually
+enforced, without needing to starve legality/pacing to chase a higher
+number.
