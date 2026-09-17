@@ -23,6 +23,10 @@ import {
   countExistingRosterEntries,
   persistGeneratedRoster,
 } from '@/roster-gen/db/rosterGen';
+import type { GenerationStrategy } from '@/roster-gen/types';
+
+const GENERATION_STRATEGIES: readonly GenerationStrategy[] = ['MIX', 'MAX_FLYING', 'MAX_DAYS_OFF'];
+const DEFAULT_GENERATION_STRATEGY: GenerationStrategy = 'MIX';
 
 /**
  * Pairing-search constraints used by the UI. Not user-configurable yet
@@ -65,6 +69,24 @@ function parseOptionalTargetBlockMinutes(
     throw new Error(`Invalid "${fieldName}" value: "${raw}"`);
   }
   return Math.round(hours * 60);
+}
+
+/**
+ * Reads the optional "strategy" form field (see page.tsx's generation
+ * form's preset buttons: MIX / MAX_FLYING / MAX_DAYS_OFF, all sharing
+ * `name="strategy"` with different `value`s on the same form as the
+ * min/max range inputs — see docs/roster-gen-assumptions.md item 20).
+ * Blank/absent -> `DEFAULT_GENERATION_STRATEGY` ('MIX'), matching
+ * `generateMonthlyRoster`'s own default. A present-but-invalid value fails
+ * fast rather than silently falling back.
+ */
+function parseGenerationStrategy(formData: FormData): GenerationStrategy {
+  const raw = formData.get('strategy');
+  if (typeof raw !== 'string' || raw.trim().length === 0) return DEFAULT_GENERATION_STRATEGY;
+  if (!GENERATION_STRATEGIES.includes(raw as GenerationStrategy)) {
+    throw new Error(`Invalid "strategy" value: "${raw}"`);
+  }
+  return raw as GenerationStrategy;
 }
 
 export async function assignSimpleDutyAction(formData: FormData): Promise<void> {
@@ -130,15 +152,16 @@ export async function generateRosterAction(formData: FormData): Promise<void> {
   const confirmed = formData.get('confirm') === 'true';
   const targetBlockMinutesMin = parseOptionalTargetBlockMinutes(formData, 'targetBlockHoursMin');
   const targetBlockMinutesMax = parseOptionalTargetBlockMinutes(formData, 'targetBlockHoursMax');
+  const generationStrategy = parseGenerationStrategy(formData);
 
   const rosterMonth = await getOrCreateRosterMonth(prisma, year, month);
   const existingCount = await countExistingRosterEntries(prisma, rosterMonth.id);
 
   if (existingCount > 0 && !confirmed) {
-    // Carries the chosen target block hours range through the confirm-
-    // before-overwrite redirect the exact same way fleetType already is,
-    // so a confirmed overwrite doesn't lose it (see page.tsx's confirm
-    // form).
+    // Carries the chosen target block hours range and strategy through the
+    // confirm-before-overwrite redirect the exact same way fleetType
+    // already is, so a confirmed overwrite doesn't lose it (see page.tsx's
+    // confirm form).
     const targetBlockHoursMinParam =
       targetBlockMinutesMin != null
         ? `&targetBlockHoursMin=${encodeURIComponent(String(targetBlockMinutesMin / 60))}`
@@ -147,8 +170,9 @@ export async function generateRosterAction(formData: FormData): Promise<void> {
       targetBlockMinutesMax != null
         ? `&targetBlockHoursMax=${encodeURIComponent(String(targetBlockMinutesMax / 60))}`
         : '';
+    const strategyParam = `&strategy=${encodeURIComponent(generationStrategy)}`;
     redirect(
-      `/roster/${year}/${month}?genConfirm=${encodeURIComponent(fleetType)}&genExisting=${existingCount}${targetBlockHoursMinParam}${targetBlockHoursMaxParam}`
+      `/roster/${year}/${month}?genConfirm=${encodeURIComponent(fleetType)}&genExisting=${existingCount}${targetBlockHoursMinParam}${targetBlockHoursMaxParam}${strategyParam}`
     );
   }
 
@@ -158,7 +182,8 @@ export async function generateRosterAction(formData: FormData): Promise<void> {
     month,
     fleetType,
     targetBlockMinutesMin,
-    targetBlockMinutesMax
+    targetBlockMinutesMax,
+    generationStrategy
   );
   await persistGeneratedRoster(prisma, rosterMonth.id, result);
 

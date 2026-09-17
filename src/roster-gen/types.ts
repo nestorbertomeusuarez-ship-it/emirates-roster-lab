@@ -13,6 +13,25 @@
 import type { GeneratedPairing } from '../pairing/types';
 import type { OperatorSpecificOverrides, RuleEvaluation } from '../ftl/types';
 
+/**
+ * Selectable construction-loop candidate-ordering strategy (see
+ * docs/roster-gen-assumptions.md item 20, superseding item 19's soft
+ * min/max bias). All three strategies share the same hard
+ * `targetBlockMinutesMax` budget filter and the same underlying
+ * legality/pacing checks — they only differ in which already-eligible
+ * candidate a day prefers:
+ *
+ *   MIX          — default. Prefers whichever haul type
+ *                  (`haulType.ts#classifyHaulType`) is currently
+ *                  least-represented among pairings assigned so far this
+ *                  month.
+ *   MAX_FLYING   — prefers the SMALLER block-time candidate, packing more
+ *                  distinct flying days into the same budget.
+ *   MAX_DAYS_OFF — prefers the BIGGER block-time candidate, reaching the
+ *                  target range with fewer, longer trips (more days off).
+ */
+export type GenerationStrategy = 'MIX' | 'MAX_FLYING' | 'MAX_DAYS_OFF';
+
 /** One calendar day's automatically-generated assignment. */
 export type RosterGenDayAssignment =
   | { type: 'OFF' }
@@ -63,47 +82,46 @@ export interface GenerateMonthlyRosterInput {
    */
   operatorConfig?: OperatorSpecificOverrides;
   /**
-   * Optional soft target RANGE, in minutes, the generator tries to steer
-   * the month's accumulated block time into (see
-   * docs/roster-gen-assumptions.md item 19, superseded/refined for the
-   * range semantics). Both bounds are independently optional:
+   * Optional target RANGE, in minutes, for the month's accumulated block
+   * time (see docs/roster-gen-assumptions.md item 20, superseding item 19's
+   * soft bias). `targetBlockMinutesMax` is now a HARD ceiling, not a
+   * preference:
    *
-   * - While the running total is BELOW `targetBlockMinutesMin`: a day's
-   *   fitting candidates are tried in descending block-time order (prefer
-   *   bigger) — fills toward the floor faster. Identical to the original
-   *   single-floor behavior.
-   * - Once the running total is AT OR ABOVE `targetBlockMinutesMin`
-   *   (whether still inside `[min, max]` or already past
-   *   `targetBlockMinutesMax` from a single day's jump): a day's fitting
-   *   candidates are tried in ASCENDING block-time order (prefer smaller)
-   *   — keeps an in-band roster from needlessly jumping back out the top,
-   *   and minimizes further overshoot once already past `max` (a greedy
-   *   day-by-day walk can't undo a prior day's pick, so the best it can do
-   *   going forward is stop making things worse).
-   * - `targetBlockMinutesMin` set, `targetBlockMinutesMax` unset: behaves
-   *   exactly like the original open floor — descending while below min,
-   *   reverts to the unbiased deterministic-shuffle order once at/above
-   *   min (no ceiling to steer away from).
-   * - `targetBlockMinutesMax` set, `targetBlockMinutesMin` unset: no floor
-   *   phase to fill toward first, so candidates are always tried in
-   *   ascending block-time order from day 1 — minimizes how far a single
-   *   day's jump can overshoot the cap.
-   * - Both `undefined`: behavior is byte-for-byte identical to no bias at
-   *   all (matches the original `targetBlockMinutes` unset case).
+   * - `targetBlockMinutesMax`, when set, is enforced as a hard eligibility
+   *   filter BEFORE any strategy-based ordering runs (see
+   *   `generationStrategy` above and `generateMonthlyRoster.ts`'s
+   *   `filterCandidatesWithinBudget`): a candidate is only eligible for a
+   *   day if `runningBlockMinutesSoFar + candidateBlockMinutes <=
+   *   targetBlockMinutesMax`. If no candidate is eligible for a day (either
+   *   none fit legally, or none fit the remaining budget), the day is OFF —
+   *   this ceiling is never exceeded by construction, except in the
+   *   degenerate case where a single available pairing's own block time
+   *   already exceeds the entire configured range (nothing smaller exists
+   *   to offer instead).
+   * - `targetBlockMinutesMin` is NOT enforced as a filter — it is purely
+   *   aspirational context for the human reading a generated summary. The
+   *   month can legitimately land under `targetBlockMinutesMin` at month
+   *   end if the combination of legality, pacing, and the hard
+   *   `targetBlockMinutesMax` ceiling simply doesn't allow reaching it —
+   *   this is an accepted outcome (per explicit user priority: "let it
+   *   leave an OFF day if necessary"), not an error condition.
+   * - Both `undefined`: no budget filtering at all — every day's eligible
+   *   candidate set is just whatever is legal (matches pre-hard-range
+   *   behavior when `targetBlockMinutesMax` is unset).
    *
-   * This never relaxes any legality check, the consecutive-duty-day cap,
-   * or the days-off pacing — it only reorders which already-legal
-   * candidate is tried first. It cannot guarantee landing inside
-   * `[targetBlockMinutesMin, targetBlockMinutesMax]`: a single available
-   * pairing might be large enough to jump past `targetBlockMinutesMax` from
-   * below `targetBlockMinutesMin` in one day, or the month's legal flying
-   * capacity might not reach `targetBlockMinutesMin` at all — this is a
-   * soft bias, not a guarantee, and `summary.totalBlockMinutes` reports
-   * whatever was actually achieved.
+   * This never relaxes any legality check, the consecutive-duty-day cap, or
+   * the days-off pacing — the budget filter only narrows which already-
+   * legal candidates are eligible, and `generationStrategy` only reorders
+   * among the eligible/legal set. `summary.totalBlockMinutes` reports
+   * whatever was actually achieved, which may be below
+   * `targetBlockMinutesMin`, but is never above `targetBlockMinutesMax`
+   * (short of the single-pairing-too-big degenerate case above).
    */
   targetBlockMinutesMin?: number;
-  /** See `targetBlockMinutesMin`'s doc comment — the paired optional ceiling. */
+  /** See `targetBlockMinutesMin`'s doc comment — the hard ceiling, enforced as a construction-time eligibility filter. */
   targetBlockMinutesMax?: number;
+  /** See `GenerationStrategy`'s doc comment above. Defaults to `'MIX'` when unset. */
+  generationStrategy?: GenerationStrategy;
 }
 
 export interface MonthlyRosterGenerationResult {

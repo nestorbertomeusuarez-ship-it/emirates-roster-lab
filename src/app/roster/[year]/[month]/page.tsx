@@ -59,6 +59,7 @@ interface RosterMonthPageProps {
     genSummary?: string;
     targetBlockHoursMin?: string;
     targetBlockHoursMax?: string;
+    strategy?: string;
   }>;
 }
 
@@ -110,6 +111,10 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
   // confirmed overwrite doesn't lose the chosen target block hours range.
   const genConfirmTargetBlockHoursMin = sp.targetBlockHoursMin ?? '';
   const genConfirmTargetBlockHoursMax = sp.targetBlockHoursMax ?? '';
+  // Carried through the confirm-before-overwrite redirect exactly like the
+  // min/max fields above (see actions.ts#generateRosterAction) so a
+  // confirmed overwrite doesn't lose the chosen generation strategy.
+  const genConfirmStrategy = sp.strategy ?? 'MIX';
 
   const rosterMonth = await getOrCreateRosterMonth(prisma, year, month);
   const entries = await listRosterEntries(prisma, rosterMonth.id);
@@ -268,13 +273,14 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
             <input type="hidden" name="confirm" value="true" />
             <input type="hidden" name="targetBlockHoursMin" value={genConfirmTargetBlockHoursMin} />
             <input type="hidden" name="targetBlockHoursMax" value={genConfirmTargetBlockHoursMax} />
+            <input type="hidden" name="strategy" value={genConfirmStrategy} />
             <button type="submit" className="border rounded px-2 py-0.5 bg-red-600 text-white">
               Generate anyway (overwrite)
             </button>
           </form>
         )}
 
-        <form action={generateRosterAction} className="flex items-center gap-2">
+        <form action={generateRosterAction} className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="year" value={year} />
           <input type="hidden" name="month" value={month} />
           <input type="hidden" name="confirm" value="false" />
@@ -303,7 +309,9 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
               // explicitly cleared. Refined the same day (still direct user
               // feedback) from a single open floor (defaultValue 85) to an
               // explicit min/max range after the floor overshot to 106h40m
-              // in one real run — see docs/roster-gen-assumptions.md item 19.
+              // in one real run, then again to a HARD max + selectable
+              // haul-mix/flying/days-off strategy after a further overshoot
+              // to 102h20m — see docs/roster-gen-assumptions.md item 20.
               defaultValue={80}
               placeholder="e.g. 80"
               className="border rounded w-16"
@@ -319,8 +327,33 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
               className="border rounded w-16"
             />
           </label>
+          {/* Direct user feedback (2026-09-17): the goal isn't maximizing
+              flying, it's a MIX of short/medium/long-haul plus days off,
+              always within the range above — MIX is the default "Generate
+              roster" button below; these two presets are optional
+              alternatives, per the user's own "couple of buttons" framing
+              (see docs/roster-gen-assumptions.md item 20). All three share
+              the same min/max range inputs above. */}
           <button
             type="submit"
+            name="strategy"
+            value="MAX_FLYING"
+            className="border rounded px-2 py-0.5"
+          >
+            Max flying
+          </button>
+          <button
+            type="submit"
+            name="strategy"
+            value="MAX_DAYS_OFF"
+            className="border rounded px-2 py-0.5"
+          >
+            Max days off
+          </button>
+          <button
+            type="submit"
+            name="strategy"
+            value="MIX"
             className="border rounded px-2 py-0.5 bg-black text-white dark:bg-white dark:text-black"
           >
             Generate roster

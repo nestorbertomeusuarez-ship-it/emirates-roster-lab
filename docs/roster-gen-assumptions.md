@@ -451,6 +451,25 @@ formula only justified to 11.5h) — this fix directly closes that gap.
 
 ## 19. Optional block-hours TARGET RANGE bias — a soft candidate-ordering preference, never a legality relaxation
 
+**SUPERSEDED AGAIN — see item 20.** Tested live against the user's real
+October 2026 roster a second time, the min/max soft bias documented below
+still overshot the 90h ceiling by 12h20m (102h20m final) — the ceiling was
+only ever a candidate-ordering *preference*, never a hard filter, so once a
+single day's pick pushed the running total past `targetBlockMinutesMax`
+there was nothing stopping a later day from accepting another
+already-over-budget candidate; a greedy day-by-day walk also can't undo an
+earlier day's pick once made. Direct user feedback in response: the target
+range must become a genuine hard ceiling (an OFF day is an acceptable
+outcome, undershooting the floor is acceptable, exceeding the ceiling is
+not), AND the underlying objective changes from "maximize flying toward the
+target" to "a MIX of short/medium/long-haul pairings and days off," with
+`MAX_FLYING`/`MAX_DAYS_OFF` offered as explicit alternative strategies. Item
+20 is the current, superseding design (hard `targetBlockMinutesMax`
+eligibility filter + `generationStrategy`); this item (including its own
+already-superseded original entry below) is kept for history per this doc's
+own update-don't-delete convention (see item #10's precedent) rather than
+silently rewritten.
+
 **SUPERSEDED (same session) — refined from a single open floor to an
 explicit min/max range.** The original version of this item (preserved
 below) added a single `targetBlockMinutes` soft floor: while under target,
@@ -564,3 +583,105 @@ above):**
 > completes normally — `summary.totalBlockMinutes` just reports whatever was
 > actually achieved, under target. No hard failure/error is raised for
 > undershooting.
+
+## 20. Hard `targetBlockMinutesMax` ceiling + haul-type MIX/MAX_FLYING/MAX_DAYS_OFF selectable strategy (supersedes item 19)
+
+Direct user feedback, verbatim (translated): *"Between 80 and 90 [hours],
+let it leave an OFF day if necessary. The goal shouldn't be assigning the
+maximum number of flights, but a MIX between short-haul, medium-haul, and
+long-haul, and days off. As an option, you could add a couple of buttons
+with preset functions like 'max flying' / 'max days off', but always within
+the 80-90 hour range."* This is a real redesign of the generator's
+objective (item 19's ceiling was only ever a candidate-ordering
+*preference*; it could still overshoot), not another refinement of the same
+soft-bias mechanism.
+
+### Haul-type classification (`src/roster-gen/haulType.ts`)
+
+A pairing's haul type is this generator's OWN scheduling heuristic — like
+`CONSECUTIVE_DUTY_DAYS_SOFT_CAP`/`TARGET_DAYS_OFF_PER_MONTH` (item #3
+above), it is not a new GCAA regulatory value. `classifyHaulType(pairing)`
+classifies by the pairing's SINGLE LONGEST leg's `blockTimeMin`, not an
+average or total across the (possibly multi-day) trip — a real long-haul
+pairing is defined by having at least one long sector, not by accumulated
+multi-day total (a 3-day trip made of three short hops is not "long-haul"
+just because its total block time is large). Boundaries, an
+industry-standard-ish convention rather than a sourced regulatory or
+Emirates-fleet-specific figure:
+
+- **SHORT** — longest leg block time < 180 min (3h).
+- **MEDIUM** — longest leg block time 180-360 min (3h-6h), inclusive at both
+  ends.
+- **LONG** — longest leg block time > 360 min (6h+).
+
+### Hard range enforcement (replaces item 19's soft ordering bias)
+
+`targetBlockMinutesMax`, when set, is now enforced in
+`generateMonthlyRoster.ts#filterCandidatesWithinBudget` as a HARD
+eligibility filter applied BEFORE any strategy-based ordering: a candidate
+is only eligible for a day if `runningBlockMinutesSoFar +
+candidateBlockMinutes <= targetBlockMinutesMax`. If no candidate is
+eligible for a day (none legal, none fit the remaining month, or none fit
+the remaining budget), the day is OFF — this is not new OFF-handling
+machinery, it is one more reason the pre-existing "no candidate fits" path
+can trigger, exactly like the existing month-fit and consecutive-duty-day
+checks already sitting in the same loop. This can leave the month under
+`targetBlockMinutesMin` at month end, which is an ACCEPTED outcome per the
+user's own explicit priority quoted above, never an error —
+`targetBlockMinutesMin` itself is no longer enforced as any kind of filter,
+it is purely informational context for a human reading the generated
+summary.
+
+### Selectable strategy (`GenerateMonthlyRosterInput.generationStrategy`)
+
+Among a day's already-budget-filtered eligible candidates,
+`generateMonthlyRoster.ts#orderCandidatesByStrategy` picks which one is
+tried first, per `generationStrategy` (default `'MIX'` when unset):
+
+- **`MIX`** (default) — prefers whichever haul type is currently
+  least-represented among pairings already assigned this month (tracked as
+  a running `Record<HaulType, number>` count, incremented every time a
+  candidate is actually accepted). Ties (including the common all-zero
+  start-of-month case) fall through to `Array#sort`'s stability, preserving
+  the existing deterministic-shuffle relative order (item #7) — so MIX
+  never needs its own separate tie-break rule.
+- **`MAX_FLYING`** — sorts ascending by total pairing block time (prefer
+  smaller), packing more distinct flying days into the same budget.
+- **`MAX_DAYS_OFF`** — sorts descending by total pairing block time (prefer
+  bigger), reaching the budget with fewer, longer trips and therefore more
+  days off.
+
+All three strategies share the exact same hard budget filter above and the
+exact same underlying legality/pacing machinery
+(`CONSECUTIVE_DUTY_DAYS_SOFT_CAP`/`TARGET_DAYS_OFF_PER_MONTH`/
+`PACING_CHECK_FROM_DAY`, and the real `evaluateDuty()` zero-RED screen) —
+they only differ in which already-eligible candidate is preferred each day.
+Every legal threshold that actually PASSES/FAILS a candidate still comes
+exclusively from `src/ftl/` and the pre-existing structural checks (month
+fit, consecutive-duty-day ceiling); the budget filter and the strategy
+never turn an illegal candidate legal, only ever turn a legal candidate's
+day into OFF or reorder which legal candidate is tried first.
+
+### Wiring
+
+`GenerateMonthlyRosterInput.generationStrategy?: GenerationStrategy`
+(`src/roster-gen/types.ts`, `'MIX' | 'MAX_FLYING' | 'MAX_DAYS_OFF'`, default
+`'MIX'`) threads through `generateMonthlyRoster` into
+`src/roster-gen/db/rosterGen.ts#buildMonthlyRosterForFleet` (one new
+optional parameter, alongside the existing min/max) into
+`src/app/roster/[year]/[month]/actions.ts#generateRosterAction` (reads an
+optional `strategy` form field, validated against the three allowed values,
+defaulting to `'MIX'` when blank/absent, carried through the
+`genConfirm`/`genExisting` redirect exactly like the min/max fields already
+are) into the generation form
+(`src/app/roster/[year]/[month]/page.tsx`), which keeps the existing
+min/max number inputs (still defaulting to 80/90) and adds the user's own
+requested "couple of preset buttons" as three submit buttons sharing
+`name="strategy"` with different `value`s on the SAME form (a standard
+no-JS-required HTML pattern — the browser only submits the clicked button's
+name/value pair): "Max flying" (`MAX_FLYING`), "Max days off"
+(`MAX_DAYS_OFF`), and the existing default "Generate roster" button, now
+`value="MIX"` — all three still submit through whatever min/max range is
+currently in those two inputs. The confirm-before-overwrite form carries
+the chosen `strategy` through a hidden field, matching the existing
+min/max pattern exactly.

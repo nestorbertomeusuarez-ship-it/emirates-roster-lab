@@ -43,16 +43,32 @@
  * day it would occupy (FDP-table, minimum rest, and the cumulative
  * block/duty-hour ceilings). If no candidate fits, the day is OFF.
  *
- * OPTIONAL BLOCK-HOURS TARGET RANGE BIAS: when `input.targetBlockMinutesMin`
- * and/or `input.targetBlockMinutesMax` are set, a day's fitting candidates
- * are reordered (see `orderCandidatesForSelection`): descending block-time
- * order (prefer bigger) while the running total is below the floor, then
- * ascending block-time order (prefer smaller) once at/above the floor — so
- * the month accumulates block hours faster while under-target and avoids
- * needlessly overshooting the ceiling once in/past range. This never
- * changes (a)/(b)/(c) above — it only reorders which already-legal
- * candidate is tried first among the day's fitting options. See
- * docs/roster-gen-assumptions.md item 19.
+ * HARD BLOCK-HOURS TARGET RANGE + SELECTABLE STRATEGY: when
+ * `input.targetBlockMinutesMax` is set, it is enforced as a HARD
+ * eligibility filter (see `filterCandidatesWithinBudget`), applied BEFORE
+ * any ordering: a candidate is only eligible for a day if
+ * `runningBlockMinutesSoFar + candidateBlockMinutes <=
+ * targetBlockMinutesMax`. If no candidate is eligible (illegal, doesn't
+ * fit the remaining month, or doesn't fit the remaining budget), the day is
+ * OFF — this can leave the month under `targetBlockMinutesMin` at month
+ * end, which is an accepted outcome, never an error (per explicit user
+ * priority: prefer an OFF day over exceeding the ceiling).
+ * `targetBlockMinutesMin` itself is NOT enforced as a filter — it is
+ * informational only.
+ *
+ * Among the day's already-budget-filtered eligible candidates,
+ * `input.generationStrategy` (default `'MIX'`) picks which one is tried
+ * first (see `orderCandidatesByStrategy` and `GenerationStrategy`'s doc
+ * comment in types.ts): `MIX` prefers the haul type
+ * (`haulType.ts#classifyHaulType`) least-represented among pairings
+ * assigned so far this month; `MAX_FLYING` prefers the smaller block-time
+ * candidate (more distinct flying days for the same budget); `MAX_DAYS_OFF`
+ * prefers the bigger block-time candidate (fewer trips, more days off).
+ * This never changes (a)/(b)/(c) above — the budget filter and strategy
+ * ordering only narrow/reorder which already-legal candidate is tried
+ * first among the day's eligible options. See
+ * docs/roster-gen-assumptions.md item 20 (item 19, preserved for history,
+ * describes the prior soft-bias design this replaces).
  * `consecutiveDutyDays >= 6` pre-emptively forces an OFF day (margin below
  * the legal 7-day ceiling), and from day 24 onward an OFF day is forced
  * whenever the days-off pace could not otherwise reach the
@@ -68,9 +84,11 @@ import { computeDutyMinutes, computeReportTime } from '../pairing/dutyTimes';
 import { toFlightDutyPeriod } from '../pairing/toFlightDutyPeriod';
 import { evaluateDuty } from '../ftl/evaluate';
 import type { CumulativeTotals, OperatorSpecificOverrides, RestPeriodInput } from '../ftl/types';
+import { classifyHaulType, type HaulType } from './haulType';
 import type {
   DatedRuleEvaluation,
   GenerateMonthlyRosterInput,
+  GenerationStrategy,
   MonthlyRosterGenerationResult,
   RosterGenDay,
 } from './types';
@@ -322,48 +340,55 @@ function sumBlockMinutes(days: RosterGenDay[]): number {
 }
 
 /**
- * Orders one day's candidate pairings for the construction loop below, per
- * `GenerateMonthlyRosterInput.targetBlockMinutesMin`/`targetBlockMinutesMax`'s
- * doc comment (types.ts) — see that comment for the full semantics table.
- * Always returns a NEW array when reordering (Array#sort is stable, so
- * candidates tied on block time keep their existing deterministic-shuffle
- * relative order — route variety among ties is unaffected); returns
- * `candidates` unchanged when neither bound is set. Never mutates
- * `candidates` itself, since the same shuffled bucket array is looked up
- * again if this date were ever revisited.
+ * Hard eligibility filter for the construction loop below, per
+ * `GenerateMonthlyRosterInput.targetBlockMinutesMax`'s doc comment
+ * (types.ts). Returns only the candidates that would NOT push the running
+ * month-to-date block-minute total past `targetBlockMinutesMax` if
+ * accepted. Returns `candidates` unchanged when `targetBlockMinutesMax` is
+ * unset (no budget filtering at all). This runs BEFORE any strategy-based
+ * ordering (`orderCandidatesByStrategy`) — eligibility is decided first,
+ * preference is decided second, and this function never reorders anything
+ * itself.
  */
-function orderCandidatesForSelection(
+function filterCandidatesWithinBudget(
   candidates: GeneratedPairing[],
   runningBlockMinutesSoFar: number,
-  targetBlockMinutesMin: number | undefined,
   targetBlockMinutesMax: number | undefined
 ): GeneratedPairing[] {
-  if (targetBlockMinutesMin == null && targetBlockMinutesMax == null) {
-    return candidates;
-  }
+  if (targetBlockMinutesMax == null) return candidates;
+  return candidates.filter(
+    (candidate) =>
+      runningBlockMinutesSoFar + pairingBlockMinutes(candidate) <= targetBlockMinutesMax
+  );
+}
 
-  // Ceiling-only (no floor configured): no floor phase to fill toward
-  // first, so always prefer the smaller candidate from day 1 — minimizes
-  // how far a single day's jump can overshoot the cap.
-  if (targetBlockMinutesMin == null) {
+/**
+ * Orders one day's ALREADY-budget-filtered eligible candidates for the
+ * construction loop below, per `input.generationStrategy`'s doc comment
+ * (`GenerationStrategy` in types.ts). Always returns a NEW array
+ * (Array#sort is stable, so candidates tied on the sort key keep their
+ * existing deterministic-shuffle relative order — route variety among ties
+ * is unaffected). Never mutates `candidates` itself, since the same
+ * shuffled bucket array is looked up again if this date were ever
+ * revisited.
+ */
+function orderCandidatesByStrategy(
+  candidates: GeneratedPairing[],
+  strategy: GenerationStrategy,
+  haulTypeCountsSoFar: Record<HaulType, number>
+): GeneratedPairing[] {
+  if (strategy === 'MAX_FLYING') {
     return [...candidates].sort((a, b) => pairingBlockMinutes(a) - pairingBlockMinutes(b));
   }
-
-  const belowFloor = runningBlockMinutesSoFar < targetBlockMinutesMin;
-  if (belowFloor) {
+  if (strategy === 'MAX_DAYS_OFF') {
     return [...candidates].sort((a, b) => pairingBlockMinutes(b) - pairingBlockMinutes(a));
   }
-
-  // At/above the floor. Floor-only (no ceiling configured): reverts to the
-  // original open-floor behavior — no further bias once the floor is met.
-  if (targetBlockMinutesMax == null) {
-    return candidates;
-  }
-
-  // At/above the floor with a ceiling configured (whether still inside
-  // [min, max] or already past max from a single day's jump): prefer the
-  // smaller candidate to avoid overshooting further.
-  return [...candidates].sort((a, b) => pairingBlockMinutes(a) - pairingBlockMinutes(b));
+  // MIX (default): prefer whichever haul type is currently
+  // least-represented among pairings assigned so far this month.
+  return [...candidates].sort(
+    (a, b) =>
+      haulTypeCountsSoFar[classifyHaulType(a)] - haulTypeCountsSoFar[classifyHaulType(b)]
+  );
 }
 
 function countDistinctPairings(days: RosterGenDay[]): number {
@@ -389,8 +414,8 @@ export function generateMonthlyRoster(
     pairings,
     airportTimeZones,
     operatorConfig,
-    targetBlockMinutesMin,
     targetBlockMinutesMax,
+    generationStrategy = 'MIX',
   } = input;
 
   const daysInMonth = daysInMonthOf(year, month);
@@ -412,6 +437,7 @@ export function generateMonthlyRoster(
   let dayIndex0 = 0; // 0-based cursor
   let daysOffSoFar = 0;
   let runningBlockMinutesSoFar = 0;
+  const haulTypeCountsSoFar: Record<HaulType, number> = { SHORT: 0, MEDIUM: 0, LONG: 0 };
 
   while (dayIndex0 < daysInMonth) {
     const date = dates[dayIndex0];
@@ -428,11 +454,15 @@ export function generateMonthlyRoster(
 
     if (!forcedOffByPacing && !forcedOffByConsecutiveCap) {
       const candidates = candidatesByStart.get(date) ?? [];
-      const orderedCandidates = orderCandidatesForSelection(
+      const eligibleCandidates = filterCandidatesWithinBudget(
         candidates,
         runningBlockMinutesSoFar,
-        targetBlockMinutesMin,
         targetBlockMinutesMax
+      );
+      const orderedCandidates = orderCandidatesByStrategy(
+        eligibleCandidates,
+        generationStrategy,
+        haulTypeCountsSoFar
       );
       for (const candidate of orderedCandidates) {
         if (dayIndex0 + candidate.tripDays > daysInMonth) continue; // wouldn't fit in the month
@@ -451,6 +481,7 @@ export function generateMonthlyRoster(
           days.push(...candidateDays);
           dayIndex0 += candidate.tripDays;
           runningBlockMinutesSoFar += pairingBlockMinutes(candidate);
+          haulTypeCountsSoFar[classifyHaulType(candidate)] += 1;
           break;
         }
       }

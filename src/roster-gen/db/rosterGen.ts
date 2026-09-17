@@ -14,7 +14,7 @@ import { assignPairingDuty, assignSimpleDuty } from '../../pairing/db/roster';
 import { getAirportTimeZones } from '../../lib/airportTimeZones';
 import { EMIRATES_OPERATOR_CONFIG } from '../../ftl/operatorConfig';
 import { generateMonthlyRoster } from '../generateMonthlyRoster';
-import type { MonthlyRosterGenerationResult } from '../types';
+import type { GenerationStrategy, MonthlyRosterGenerationResult } from '../types';
 
 /**
  * Pairing-search constraints used to build the candidate pool for
@@ -34,9 +34,12 @@ export const ROSTER_GEN_PAIRING_CONSTRAINTS = {
  * every known airport's timezone, and runs the pure generator.
  *
  * `targetBlockMinutesMin`/`targetBlockMinutesMax` are optional and threaded
- * straight through to `generateMonthlyRoster`'s soft block-hours target
- * range bias (see docs/roster-gen-assumptions.md item 19) — both
- * `undefined` behaves exactly as before these parameters existed.
+ * straight through to `generateMonthlyRoster` — `targetBlockMinutesMax` is
+ * now a HARD ceiling, `targetBlockMinutesMin` is informational only (see
+ * docs/roster-gen-assumptions.md item 20). `generationStrategy` is optional
+ * and defaults to `'MIX'` when unset (see `GenerationStrategy` in
+ * `../types.ts`). All three `undefined` behaves exactly as before these
+ * parameters existed.
  */
 export async function buildMonthlyRosterForFleet(
   prisma: PrismaClient,
@@ -44,7 +47,8 @@ export async function buildMonthlyRosterForFleet(
   month: number,
   fleetType: string,
   targetBlockMinutesMin?: number,
-  targetBlockMinutesMax?: number
+  targetBlockMinutesMax?: number,
+  generationStrategy?: GenerationStrategy
 ): Promise<MonthlyRosterGenerationResult> {
   const pairings = await generatePairingsForMonth(prisma, year, month, {
     ...ROSTER_GEN_PAIRING_CONSTRAINTS,
@@ -64,6 +68,7 @@ export async function buildMonthlyRosterForFleet(
     operatorConfig: EMIRATES_OPERATOR_CONFIG,
     targetBlockMinutesMin,
     targetBlockMinutesMax,
+    generationStrategy,
   });
 }
 
