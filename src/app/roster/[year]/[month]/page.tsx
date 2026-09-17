@@ -31,6 +31,7 @@ import CompliancePanel from './CompliancePanel';
 import { generateRosterAction } from './actions';
 import { buildDayCategoryMap, buildWorstSeverityMap } from './dayPresentation';
 import { buildFlightDaySummaryMap } from './flightDaySummary';
+import { buildMonthSummary } from './monthSummary';
 import { nextMonth, previousMonth } from './adjacentMonth';
 import { hasNoScheduleDataForMonth } from './emptyScheduleData';
 
@@ -41,6 +42,14 @@ const UI_PAIRING_CONSTRAINTS = {
 };
 
 const WEEKDAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+// Same 'HhMMm' format DayCard.tsx/PairingTimeline.tsx already use for
+// block/duty times — kept consistent rather than inventing a fourth format.
+function formatMinutes(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours}h${String(mins).padStart(2, '0')}m`;
+}
 
 interface RosterMonthPageProps {
   params: Promise<{ year: string; month: string }>;
@@ -123,6 +132,10 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
   // new evaluation, no additional DB query.
   const flightDaySummaryByDate = buildFlightDaySummaryMap(rosterGenDays, airportTimeZones);
 
+  // Direct user feedback (2026-09-17): whole-month totals (block/duty hours,
+  // DXB days off) in the header, at a glance — see monthSummary.ts.
+  const monthSummary = buildMonthSummary(cells, dayCategoryByDate, flightDaySummaryByDate);
+
   const pairings = await generatePairingsForMonth(prisma, year, month, UI_PAIRING_CONSTRAINTS);
   const candidatesByStartDate = new Map<string, GeneratedPairing[]>();
   for (const pairing of pairings) {
@@ -166,21 +179,38 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
 
   return (
     <main className="p-6 max-w-5xl mx-auto">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
         <h1 className="text-xl font-semibold">
           Roster — {year}-{String(month).padStart(2, '0')}
         </h1>
-        <nav className="flex items-center gap-3 text-xs">
-          <Link href={`/roster/${prev.year}/${prev.month}`} className="underline">
-            ← Prev
-          </Link>
-          <Link href={`/roster/${next.year}/${next.month}`} className="underline">
-            Next →
-          </Link>
-          <Link href="/roster" className="underline text-zinc-400">
-            ← All months
-          </Link>
-        </nav>
+        <div className="flex flex-col items-end gap-1">
+          <nav className="flex items-center gap-3 text-xs">
+            <Link href={`/roster/${prev.year}/${prev.month}`} className="underline">
+              ← Prev
+            </Link>
+            <Link href={`/roster/${next.year}/${next.month}`} className="underline">
+              Next →
+            </Link>
+            <Link href="/roster" className="underline text-zinc-400">
+              ← All months
+            </Link>
+          </nav>
+          {/* Direct user feedback (2026-09-17): whole-month totals at a
+              glance — see monthSummary.ts. */}
+          <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+            <span title="Total block time this month">
+              {formatMinutes(monthSummary.totalBlockMinutes)} blk
+            </span>
+            <span>&middot;</span>
+            <span title="Total duty time this month">
+              {formatMinutes(monthSummary.totalDutyMinutes)} duty
+            </span>
+            <span>&middot;</span>
+            <span title="Days off at home base (DXB) this month">
+              {monthSummary.dxbDaysOff} DXB off
+            </span>
+          </div>
+        </div>
       </div>
       <p className="text-xs text-zinc-400 mb-6">
         {pairings.length} candidate pairing{pairings.length === 1 ? '' : 's'} generated
