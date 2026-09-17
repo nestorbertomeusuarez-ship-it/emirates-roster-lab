@@ -148,6 +148,48 @@ function buildHaulMixPairings(fleetType: string) {
   });
 }
 
+/**
+ * A full month of trivial 1-day, minimal-block-time (60min) candidate
+ * pairings, one starting every day, well-rested from each other (~23h
+ * gap). Used specifically to isolate `forcedOffByPacing`/`MONTH_PACING`
+ * (docs item 25): real block/duty-hour legality never becomes the binding
+ * constraint here (blocks are tiny), so with `targetBlockMinutesMin` set
+ * unreachably high (suppressing weekly pacing, docs item 23) the ONLY
+ * remaining OFF-day causes are the consecutive-duty soft cap and,
+ * eventually, the month-level days-off pacing backstop — confirmed by
+ * direct inspection this fixture reliably produces both.
+ */
+function buildDailySingleLegPairings(fleetType: string): GeneratedPairing[] {
+  const pairings: GeneratedPairing[] = [];
+  for (let day = 1; day <= DAYS_IN_MONTH; day += 1) {
+    const date = isoDate(day);
+    seq += 1;
+    const instance: DatedFlightInstance = {
+      scheduleLineId: `tiny-${seq}`,
+      number: `EK${9500 + seq}`,
+      depIata: 'DXB',
+      arrIata: 'DXB',
+      serviceDate: date,
+      depUTC: new Date(`${date}T08:00:00.000Z`),
+      arrUTC: new Date(`${date}T09:00:00.000Z`),
+      blockTimeMin: 60,
+      aircraftType: fleetType,
+    };
+    pairings.push({
+      fleetType,
+      legs: [{ instance, layoverMinutesBeforeThisLeg: null }],
+      startServiceDate: date,
+      endServiceDate: date,
+      tripDays: 1,
+    });
+  }
+  return pairings;
+}
+
+function isoDate(day: number): string {
+  return new Date(Date.UTC(YEAR, MONTH - 1, day)).toISOString().slice(0, 10);
+}
+
 function addDaysIso(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00.000Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -1069,5 +1111,94 @@ describe('generateMonthlyRoster — cross-month rest + consecutive-duty-day carr
     expect(explicit.days).toEqual(omitted.days);
     expect(explicit.evaluations).toEqual(omitted.evaluations);
     expect(explicit.summary).toEqual(omitted.summary);
+  });
+});
+
+describe('generateMonthlyRoster — offReasonCounts (docs item 25)', () => {
+  it('tallies MONTH_PACING once weekly pacing is suppressed and legality never binds (docs items 23/25)', () => {
+    // With targetBlockMinutesMin set unreachably high, weekly pacing (item
+    // 21 layer 2) is suppressed for the whole month (item 23) — the only
+    // remaining OFF-day causes are the consecutive-duty soft cap and,
+    // eventually, this month-level backstop. Confirmed the ordinary
+    // (unsuppressed) weekly-pacing pace usually reaches the month target
+    // well before day 24 on its own, making MONTH_PACING rare in practice —
+    // this fixture deliberately removes that competing mechanism to
+    // exercise the backstop directly.
+    const pairings = buildDailySingleLegPairings('A350');
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+      targetBlockMinutesMin: 999_999 * 60,
+    });
+
+    expect(result.summary.offReasonCounts.MONTH_PACING).toBeGreaterThan(0);
+  });
+
+  it('tallies WEEKLY_PACING for the fixture item 22 already uses to isolate it, and CONSECUTIVE_CAP for the plain single-route fixture', () => {
+    const weeklyPacingResult = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings: buildDailyTwoDayRoutePairings('A350'),
+      airportTimeZones: AIRPORT_TZS,
+    });
+    expect(weeklyPacingResult.summary.offReasonCounts.WEEKLY_PACING).toBeGreaterThan(0);
+
+    // buildDailyTwoDayRoutePairings' own 2-day trips never chain long
+    // enough to hit the 6-day consecutive-duty soft cap — the plain
+    // single-route (3-day trip) fixture with no budget set does, by
+    // chaining consecutive trips back-to-back.
+    const consecutiveCapResult = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings: buildSingleRoutePairings('A350'),
+      airportTimeZones: AIRPORT_TZS,
+    });
+    expect(consecutiveCapResult.summary.offReasonCounts.CONSECUTIVE_CAP).toBeGreaterThan(0);
+  });
+
+  it('tallies STREAK_EXTENSION for the same fixture — item 22 already proves it produces varying-length OFF blocks, which requires at least one extension firing', () => {
+    const pairings = buildDailyTwoDayRoutePairings('A350');
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+    });
+
+    expect(result.summary.offReasonCounts.STREAK_EXTENSION).toBeGreaterThan(0);
+  });
+
+  it('tallies NO_ELIGIBLE_CANDIDATE for the hard-ceiling fixture (docs item 20) once the budget is exhausted', () => {
+    const pairings = buildSingleRoutePairings('A350');
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+      targetBlockMinutesMax: 1400,
+    });
+
+    expect(result.summary.offReasonCounts.NO_ELIGIBLE_CANDIDATE).toBeGreaterThan(0);
+  });
+
+  it('offReasonCounts values always sum to summary.offDays', () => {
+    const pairings = buildFixturePairings('A350');
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+    });
+
+    const sum = Object.values(result.summary.offReasonCounts).reduce((a, b) => a + b, 0);
+    expect(sum).toBe(result.summary.offDays);
   });
 });

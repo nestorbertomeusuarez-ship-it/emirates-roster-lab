@@ -19,10 +19,23 @@ import {
 import { generatePairingsForMonth } from '@/pairing/db/pairings';
 import type { DutyType } from '@/pairing/types';
 import { buildMonthlyRosterForFleet, persistGeneratedRoster } from '@/roster-gen/db/rosterGen';
-import type { GenerationStrategy } from '@/roster-gen/types';
+import type { GenerationStrategy, OffReason } from '@/roster-gen/types';
 
 const GENERATION_STRATEGIES: readonly GenerationStrategy[] = ['MIX', 'MAX_FLYING', 'MAX_DAYS_OFF'];
 const DEFAULT_GENERATION_STRATEGY: GenerationStrategy = 'MIX';
+
+/**
+ * Fixed order the 5 `OffReason` counts are appended to `genSummary` in
+ * (docs/roster-gen-assumptions.md item 25) — `page.tsx`'s `parseGenSummary`
+ * must read them back in this exact same order.
+ */
+const OFF_REASON_KEYS: readonly OffReason[] = [
+  'MONTH_PACING',
+  'CONSECUTIVE_CAP',
+  'WEEKLY_PACING',
+  'STREAK_EXTENSION',
+  'NO_ELIGIBLE_CANDIDATE',
+];
 
 /**
  * Pairing-search constraints used by the UI. Not user-configurable yet
@@ -172,6 +185,10 @@ export async function generateRosterAction(formData: FormData): Promise<void> {
   await persistGeneratedRoster(prisma, rosterMonth.id, result);
 
   const redCount = result.evaluations.filter((e) => e.evaluation.severity === 'RED').length;
+  // The first 6 fields are the original genSummary format — the 5
+  // OffReason counts (docs item 25) are appended at the end, in
+  // OFF_REASON_KEYS's fixed order, so an old-format URL still parses its
+  // first 6 fields fine even if it predates this item.
   const summary = [
     fleetType,
     result.summary.flightDays,
@@ -179,6 +196,7 @@ export async function generateRosterAction(formData: FormData): Promise<void> {
     result.summary.totalBlockMinutes,
     result.summary.pairingsAssigned,
     redCount,
+    ...OFF_REASON_KEYS.map((key) => result.summary.offReasonCounts[key]),
   ].join(':');
 
   revalidatePath(`/roster/${year}/${month}`);

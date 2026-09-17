@@ -24,6 +24,7 @@ import { countFlightInstancesForMonth } from '@/pairing/db/flightInstances';
 import type { GeneratedPairing } from '@/pairing/types';
 import { loadRosterGenDaysForMonth } from '@/roster-gen/db/loadRosterGenDays';
 import { evaluateRosterDays } from '@/roster-gen/generateMonthlyRoster';
+import type { OffReason } from '@/roster-gen/types';
 import { getAirportTimeZones } from '@/lib/airportTimeZones';
 import { EMIRATES_OPERATOR_CONFIG } from '@/ftl/operatorConfig';
 import DayCard from './DayCard';
@@ -65,13 +66,52 @@ interface GenerationSummary {
   totalBlockMinutes: number;
   pairingsAssigned: number;
   redCount: number;
+  /** docs/roster-gen-assumptions.md item 25 — see actions.ts's OFF_REASON_KEYS for the fixed field order this is parsed back in. */
+  offReasonCounts: Record<OffReason, number>;
+}
+
+// Must match actions.ts's OFF_REASON_KEYS exactly (same order, same set) —
+// the 5 trailing genSummary fields are parsed back positionally.
+const OFF_REASON_KEYS: readonly OffReason[] = [
+  'MONTH_PACING',
+  'CONSECUTIVE_CAP',
+  'WEEKLY_PACING',
+  'STREAK_EXTENSION',
+  'NO_ELIGIBLE_CANDIDATE',
+];
+
+const OFF_REASON_LABELS: Record<OffReason, string> = {
+  MONTH_PACING: 'month pacing',
+  CONSECUTIVE_CAP: 'consecutive-duty cap',
+  WEEKLY_PACING: 'weekly pacing',
+  STREAK_EXTENSION: 'streak extension',
+  NO_ELIGIBLE_CANDIDATE: 'no eligible candidate',
+};
+
+/** Skips zero counts — e.g. "3 weekly pacing, 2 month pacing, 1 no eligible candidate". */
+function formatOffReasonCounts(counts: Record<OffReason, number>): string {
+  return OFF_REASON_KEYS.filter((key) => counts[key] > 0)
+    .map((key) => `${counts[key]} ${OFF_REASON_LABELS[key]}`)
+    .join(', ');
 }
 
 function parseGenSummary(raw: string | undefined): GenerationSummary | null {
   if (!raw) return null;
-  const [fleetType, flightDays, offDays, totalBlockMinutes, pairingsAssigned, redCount] =
-    raw.split(':');
+  const fields = raw.split(':');
+  const [fleetType, flightDays, offDays, totalBlockMinutes, pairingsAssigned, redCount] = fields;
   if (!fleetType) return null;
+
+  // The 5 OffReason counts (docs item 25) are optional trailing fields —
+  // defensively defaulted to 0 so an old-format URL (from before this item)
+  // still parses its first 6 fields fine instead of breaking.
+  const offReasonCounts = OFF_REASON_KEYS.reduce<Record<OffReason, number>>(
+    (acc, key, i) => {
+      acc[key] = Number(fields[6 + i]) || 0;
+      return acc;
+    },
+    {} as Record<OffReason, number>
+  );
+
   return {
     fleetType,
     flightDays: Number(flightDays),
@@ -79,6 +119,7 @@ function parseGenSummary(raw: string | undefined): GenerationSummary | null {
     totalBlockMinutes: Number(totalBlockMinutes),
     pairingsAssigned: Number(pairingsAssigned),
     redCount: Number(redCount),
+    offReasonCounts,
   };
 }
 
@@ -241,6 +282,11 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
             {genSummary.redCount > 0
               ? `${genSummary.redCount} RED FTL compliance flag(s) — this indicates a bug in the generator, review before relying on this roster.`
               : 'No FTL compliance flags from the post-generation verification pass.'}
+            {genSummary.offDays > 0 && (
+              <div className="text-sm opacity-80 mt-1">
+                {genSummary.offDays} OFF: {formatOffReasonCounts(genSummary.offReasonCounts)}
+              </div>
+            )}
           </div>
         )}
 

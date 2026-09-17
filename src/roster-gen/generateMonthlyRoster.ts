@@ -243,6 +243,21 @@
  * real history exists instead of only from day 14/28 — a materially
  * bigger change than this item makes. Documented here as a known,
  * intentional follow-on gap, not an oversight.
+ *
+ * SURFACING WHY AN OFF DAY HAPPENED (docs/roster-gen-assumptions.md item
+ * 25, IN-MEMORY ONLY, never persisted): the construction loop below already
+ * computes exactly which condition forced a given OFF day
+ * (`forcedOffByPacing`/`forcedOffByConsecutiveCap`/`forcedOffByWeeklyPacing`/
+ * `forcedOffByStreakExtension`, or none of those with no eligible candidate
+ * either) — `determineOffReason` resolves this into `RosterGenDayAssignment`'s
+ * OFF-variant `reason` field (optional; only this generator's own OFF days
+ * ever set it — `src/roster-gen/db/loadRosterGenDays.ts` reconstructing an
+ * OFF day from a persisted `RosterEntry` leaves it `undefined`, since it was
+ * never persisted). `summary.offReasonCounts` tallies these for the caller.
+ * Confirmed scope: this is a debugging/observability aid surfaced only in
+ * the immediate post-generation summary UI (`actions.ts`'s `genSummary`) —
+ * not a durable fact about the roster, so it is never written to
+ * `RosterEntry` and never survives a page reload.
  */
 
 import type { GeneratedPairing, PairingLegResult } from '../pairing/types';
@@ -261,6 +276,7 @@ import type {
   GenerateMonthlyRosterInput,
   GenerationStrategy,
   MonthlyRosterGenerationResult,
+  OffReason,
   RosterGenDay,
 } from './types';
 
@@ -778,6 +794,44 @@ function countDistinctPairings(days: RosterGenDay[]): number {
 }
 
 /**
+ * Docs item 25 — resolves WHY a forced OFF day happened, in the exact same
+ * precedence order as the construction loop's own gate below (`if
+ * (!forcedOffByPacing && !forcedOffByConsecutiveCap && !forcedOffByWeeklyPacing
+ * && !forcedOffByStreakExtension)`): first true wins. If none of the four
+ * forced it but the day still went OFF, no legal/budget-eligible candidate
+ * existed for it — see `OffReason`'s own doc comment (types.ts).
+ */
+function determineOffReason(
+  forcedOffByPacing: boolean,
+  forcedOffByConsecutiveCap: boolean,
+  forcedOffByWeeklyPacing: boolean,
+  forcedOffByStreakExtension: boolean
+): OffReason {
+  if (forcedOffByPacing) return 'MONTH_PACING';
+  if (forcedOffByConsecutiveCap) return 'CONSECUTIVE_CAP';
+  if (forcedOffByWeeklyPacing) return 'WEEKLY_PACING';
+  if (forcedOffByStreakExtension) return 'STREAK_EXTENSION';
+  return 'NO_ELIGIBLE_CANDIDATE';
+}
+
+/** Tallies every OFF day's `reason` (docs item 25) — every key present, sums to the number of OFF days with a reason. */
+function computeOffReasonCounts(days: RosterGenDay[]): Record<OffReason, number> {
+  const counts: Record<OffReason, number> = {
+    MONTH_PACING: 0,
+    CONSECUTIVE_CAP: 0,
+    WEEKLY_PACING: 0,
+    STREAK_EXTENSION: 0,
+    NO_ELIGIBLE_CANDIDATE: 0,
+  };
+  for (const day of days) {
+    if (day.assignment.type === 'OFF' && day.assignment.reason) {
+      counts[day.assignment.reason] += 1;
+    }
+  }
+  return counts;
+}
+
+/**
  * Generates a full-month FLIGHT/OFF assignment for one fleet type. Pure
  * function — see this module's doc comment for the algorithm and its
  * explicit scope limitations.
@@ -955,7 +1009,13 @@ export function generateMonthlyRoster(
     }
 
     if (!assignedPairing) {
-      days.push({ date, assignment: { type: 'OFF' } });
+      const offReason = determineOffReason(
+        forcedOffByPacing,
+        forcedOffByConsecutiveCap,
+        forcedOffByWeeklyPacing,
+        forcedOffByStreakExtension
+      );
+      days.push({ date, assignment: { type: 'OFF', reason: offReason } });
       daysOffSoFar += 1;
       weeklyOffDaysSoFar += 1;
       dayIndex0 += 1;
@@ -995,6 +1055,7 @@ export function generateMonthlyRoster(
       offDays: days.length - flightDays,
       totalBlockMinutes: sumBlockMinutes(days),
       pairingsAssigned: countDistinctPairings(days),
+      offReasonCounts: computeOffReasonCounts(days),
     },
   };
 }

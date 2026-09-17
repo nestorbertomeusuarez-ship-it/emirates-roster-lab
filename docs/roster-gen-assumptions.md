@@ -1192,3 +1192,92 @@ New optional `GenerateMonthlyRosterInput.priorMonthTailDays` field. New
 wired into `buildMonthlyRosterForFleet` automatically — `actions.ts` and
 the generation form needed zero changes; every existing caller gets
 cross-month carry-over for free.
+
+## 25. Surfacing WHY a day went OFF: `offReasonCounts`, in-memory only, never persisted
+
+Self-diagnosed, alongside item 24 — surfaced during the same broader
+codebase survey. The construction loop already computes exactly which
+condition forced a given OFF day (`forcedOffByPacing`/
+`forcedOffByConsecutiveCap`/`forcedOffByWeeklyPacing`/
+`forcedOffByStreakExtension`, or none of those with no legal/budget-
+eligible candidate either) but discarded all of it the instant it pushed
+`{ type: 'OFF' }` — nothing downstream could ever tell "OFF because
+illegal/no candidate" from "OFF because of pacing" from "OFF because of
+the item 23 min-floor suppression."
+
+**Confirmed scope, asked directly and answered before implementation**: the
+user chose "solo en el resumen post-generación" (only in the immediate
+post-generation summary) over a persistent/schema-migration alternative.
+This is therefore a debugging/observability aid, not a durable fact about
+the roster — never written to `RosterEntry`, never survives a page reload.
+
+### What changed
+
+`RosterGenDayAssignment`'s OFF variant gains an optional `reason?:
+OffReason` field (`types.ts`) — optional, not a new discriminated variant,
+confirmed safe by checking every `{ type: 'OFF' }` construction site and
+every `.type === 'OFF'` consumer in the codebase: `src/roster-gen/db/
+loadRosterGenDays.ts` (reconstructing an OFF day from a persisted
+`RosterEntry`, which never recorded a reason) stays exactly as `{ type:
+'OFF' }`, still a valid value of the now-optional field; every existing
+`toEqual({ type: 'OFF' })` test fixture is unaffected (Vitest/Jest treat an
+absent optional property as equal to `undefined`).
+
+`OffReason = 'MONTH_PACING' | 'CONSECUTIVE_CAP' | 'WEEKLY_PACING' |
+'STREAK_EXTENSION' | 'NO_ELIGIBLE_CANDIDATE'` — `determineOffReason`
+resolves it in the EXACT SAME precedence order as the construction loop's
+own gate (`if (!forcedOffByPacing && !forcedOffByConsecutiveCap &&
+!forcedOffByWeeklyPacing && !forcedOffByStreakExtension)`): first true
+wins; if none forced it but the day still went OFF, no eligible candidate
+existed. `MonthlyRosterGenerationResult.summary.offReasonCounts` tallies
+these (every key present, sums to `offDays`).
+
+`actions.ts`'s `genSummary` query-string mechanism is extended, not
+replaced: the 5 reason counts are appended AFTER the existing 6 fields, in
+a fixed order (`OFF_REASON_KEYS`), so an old-format URL from before this
+item still parses its first 6 fields fine. `page.tsx` renders a new line
+in the existing post-generation banner, e.g. "7 OFF: 3 weekly pacing, 2
+month pacing, 1 consecutive-duty cap, 1 no eligible candidate" (zero-count
+reasons skipped).
+
+### A genuinely rare backstop, confirmed empirically
+
+Writing this item's own tests surfaced something worth recording: MONTH_PACING
+(the month-level `TARGET_DAYS_OFF_PER_MONTH` check, `PACING_CHECK_FROM_DAY
+= 24`) turned out to be very difficult to trigger via any of this file's
+existing route-based fixtures — because item 21's weekly pacing (layer 2)
+already keeps the month's days-off count close to its target throughout,
+making the month-level check a rarely-the-deciding-factor backstop in
+practice, not a dead path (its own construction-loop gate is exercised
+correctly, precedence-wise, whenever it IS true — see `determineOffReason`
+above). It only became reliably reproducible in a synthetic fixture
+(`buildDailySingleLegPairings`) that deliberately suppresses weekly pacing
+via an unreachably high `targetBlockMinutesMin` (item 23) while using
+minimal block times so real FTL legality never independently binds first.
+Confirmed this is not purely synthetic: a real read-only run against the
+live Oct 2026 schedule with the 70h floor active (item 23) showed
+`MONTH_PACING: 4` for both fleets — the same interaction (floor-forcing
+suppresses weekly pacing) that makes this fixture work shows up for real
+whenever the floor is actively being chased.
+
+### Verification
+
+New `describe('generateMonthlyRoster — offReasonCounts (docs item 25)')`
+block: each of the 5 `OffReason` values confirmed to actually occur via a
+fixture engineered (or reused from items 20-22) to produce it, plus a sum
+invariant (`offReasonCounts` values sum to `summary.offDays`). Real
+read-only `buildMonthlyRosterForFleet` check against Oct 2026 for both
+fleets: totals unchanged from the last item-23 verification (81.33h/85.17h),
+`offReasonCounts` sums correctly, 0 RED both fleets — confirms this item is
+purely additive, no behavior change.
+
+### Wiring
+
+New `OffReason` type and `RosterGenDayAssignment.OFF.reason` field
+(`src/roster-gen/types.ts`), new `MonthlyRosterGenerationResult.summary.
+offReasonCounts` field. New `determineOffReason`/`computeOffReasonCounts`
+in `generateMonthlyRoster.ts`. `actions.ts` gained `OFF_REASON_KEYS` and
+appends 5 fields to `genSummary`; `page.tsx` gained matching
+`OFF_REASON_KEYS`/`OFF_REASON_LABELS`/`formatOffReasonCounts` and a new
+banner line. No schema migration, no new `GenerateMonthlyRosterInput`
+field — every existing caller gets `offReasonCounts` for free.

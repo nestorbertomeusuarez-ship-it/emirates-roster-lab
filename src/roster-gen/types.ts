@@ -32,9 +32,48 @@ import type { OperatorSpecificOverrides, RuleEvaluation } from '../ftl/types';
  */
 export type GenerationStrategy = 'MIX' | 'MAX_FLYING' | 'MAX_DAYS_OFF';
 
+/**
+ * Why the construction loop forced a specific OFF day (docs/roster-gen-
+ * assumptions.md item 25) — computed strictly in the same precedence order
+ * as the construction loop's own forcing checks in `generateMonthlyRoster.ts`
+ * (`determineOffReason`):
+ *
+ *   MONTH_PACING        — the month-level `TARGET_DAYS_OFF_PER_MONTH` check
+ *                          (`forcedOffByPacing`).
+ *   CONSECUTIVE_CAP      — the consecutive-duty-day soft cap
+ *                          (`forcedOffByConsecutiveCap`).
+ *   WEEKLY_PACING        — the weekly-block-pacing trigger (docs item 21,
+ *                          `forcedOffByWeeklyPacing`).
+ *   STREAK_EXTENSION     — the natural-variation streak extension (docs
+ *                          item 22, `forcedOffByStreakExtension`).
+ *   NO_ELIGIBLE_CANDIDATE — none of the above forced it, but no legal/
+ *                          budget-eligible candidate existed for the day
+ *                          either.
+ *
+ * In-memory only — see `MonthlyRosterGenerationResult.summary.offReasonCounts`
+ * and this field's own doc comment below; NEVER persisted to `RosterEntry`
+ * (confirmed scope, docs item 25).
+ */
+export type OffReason =
+  | 'MONTH_PACING'
+  | 'CONSECUTIVE_CAP'
+  | 'WEEKLY_PACING'
+  | 'STREAK_EXTENSION'
+  | 'NO_ELIGIBLE_CANDIDATE';
+
 /** One calendar day's automatically-generated assignment. */
 export type RosterGenDayAssignment =
-  | { type: 'OFF' }
+  | {
+      type: 'OFF';
+      /**
+       * Why this day was forced OFF (docs item 25) — set by the real
+       * generator's construction loop, left `undefined` by every other
+       * constructor of an OFF day (e.g. `loadRosterGenDays.ts`
+       * reconstructing from a persisted `RosterEntry`, which never
+       * recorded a reason since this is not persisted).
+       */
+      reason?: OffReason;
+    }
   | { type: 'FLIGHT'; pairing: GeneratedPairing; dayOfPairing: number };
 
 export interface RosterGenDay {
@@ -162,5 +201,11 @@ export interface MonthlyRosterGenerationResult {
     offDays: number;
     totalBlockMinutes: number;
     pairingsAssigned: number;
+    /**
+     * Every OFF day's construction-time `OffReason`, tallied (docs item 25)
+     * — every key present (0 for a reason that never fired), values sum to
+     * `offDays`. In-memory only, computed fresh every call, never persisted.
+     */
+    offReasonCounts: Record<OffReason, number>;
   };
 }
