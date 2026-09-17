@@ -127,6 +127,8 @@ describe('buildFlightDaySummaryMap', () => {
     expect(map.get('2026-10-05')).toEqual({
       category: 'FLIGHT',
       route: 'DXB→LHR',
+      // report = depUTC - 90min = 00:30Z; DXB local (Asia/Dubai, UTC+4) = 04:30.
+      reportLocalTime: '04:30',
       blockMinutes: 420,
       // report = depUTC - 90min = 00:30Z, last on-blocks = 09:00Z -> 510 min.
       dutyMinutes: 510,
@@ -224,6 +226,8 @@ describe('buildFlightDaySummaryMap', () => {
     if (summary?.category === 'FLIGHT') {
       // report = 01:00Z - 90min = 2026-10-04T23:30Z, last on-blocks = 08:00Z -> 510 min.
       expect(summary.dutyMinutes).toBe(510);
+      // DXB local (Asia/Dubai, UTC+4) of 2026-10-04T23:30Z = 2026-10-05T03:30.
+      expect(summary.reportLocalTime).toBe('03:30');
     }
   });
 

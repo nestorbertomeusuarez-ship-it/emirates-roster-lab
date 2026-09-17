@@ -122,6 +122,23 @@ describe('buildPairingTimelineRows', () => {
     expect(rows[0].depLocalTime).toBe('02:00');
   });
 
+  it('formats reportLocalTime in the day\'s first departure station timezone', () => {
+    const rows = buildPairingTimelineRows(makeSingleLegDayPairing(), TZ);
+
+    // Day 1: report = depUTC(02:00Z) - 90min = 00:30Z; DXB local (Asia/Dubai, UTC+4) = 04:30.
+    expect(rows[0].reportLocalTime).toBe('04:30');
+    // Day 2 (day 3 of trip): report = 08:00Z - 90min = 06:30Z; LHR local (BST, UTC+1) = 07:30.
+    expect(rows[1].reportLocalTime).toBe('07:30');
+  });
+
+  it('shares one reportLocalTime value across multiple legs on the same day', () => {
+    const rows = buildPairingTimelineRows(makeSameDayTwoLegPairing(), TZ);
+
+    // report = depUTC(01:00Z) - 90min = 2026-10-04T23:30Z; DXB local (UTC+4) = 2026-10-05T03:30.
+    expect(rows[0].reportLocalTime).toBe(rows[1].reportLocalTime);
+    expect(rows[0].reportLocalTime).toBe('03:30');
+  });
+
   it('computes each day duty minutes from report time to last on-blocks, one value per day', () => {
     const rows = buildPairingTimelineRows(makeSingleLegDayPairing(), TZ);
 

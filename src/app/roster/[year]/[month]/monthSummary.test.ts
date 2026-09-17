@@ -25,8 +25,8 @@ describe('buildMonthSummary', () => {
       ['2026-10-02', 'FLIGHT'],
     ]);
     const summaries = new Map<string, FlightDaySummary>([
-      ['2026-10-01', { category: 'FLIGHT', route: 'DXB→LHR', blockMinutes: 420, dutyMinutes: 510 }],
-      ['2026-10-02', { category: 'FLIGHT', route: 'LHR→DXB', blockMinutes: 400, dutyMinutes: 490 }],
+      ['2026-10-01', { category: 'FLIGHT', route: 'DXB→LHR', reportLocalTime: '04:30', blockMinutes: 420, dutyMinutes: 510 }],
+      ['2026-10-02', { category: 'FLIGHT', route: 'LHR→DXB', reportLocalTime: '10:00', blockMinutes: 400, dutyMinutes: 490 }],
     ]);
 
     const result = buildMonthSummary(cells, categories, summaries);

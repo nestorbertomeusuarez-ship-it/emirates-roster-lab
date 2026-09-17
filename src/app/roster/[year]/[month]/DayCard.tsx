@@ -141,8 +141,14 @@ function FlightSummaryLine({ summary }: { summary: FlightDaySummary }) {
       </div>
     );
   }
+  // Direct user feedback (2026-09-18): "incluye en cada dia de vuelo la
+  // hora de reporting time" — report time is computed as STD minus
+  // DEFAULT_REPORT_OFFSET_MINUTES (dutyTimes.ts, always an assumption, not
+  // a confirmed EK policy value), local to the day's first departure
+  // station, same source already used for dutyMinutes below.
   return (
     <div className="text-zinc-500 dark:text-zinc-400 text-xs md:text-[10px]">
+      rep {summary.reportLocalTime} &middot;{' '}
       {summary.route.split('→').map(cityLabel).join(' → ')} &middot;{' '}
       {formatMinutes(summary.blockMinutes)} blk &middot; {formatMinutes(summary.dutyMinutes)} duty
     </div>

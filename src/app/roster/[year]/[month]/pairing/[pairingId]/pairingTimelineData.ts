@@ -31,6 +31,17 @@ export interface PairingTimelineRow {
   /** Ground time at `depIata` before this leg departs. Null for the pairing's first leg. */
   layoverBeforeMinutes: number | null;
   /**
+   * Local ('HH:MM', the day's FIRST departure station's timezone) report
+   * time for the calendar day this leg belongs to —
+   * `dutyTimes.ts#computeReportTime` (STD minus `DEFAULT_REPORT_OFFSET_MINUTES`,
+   * an assumption — see that constant's own doc comment) formatted the same
+   * way `depLocalTime`/`arrLocalTime` already are. Every leg flown the same
+   * day shares this same value, mirroring `dailyDutyMinutes` below (report
+   * time is a property of the whole duty day, computed once from that
+   * day's first departure, not of an individual leg).
+   */
+  reportLocalTime: string;
+  /**
    * Total duty time (report time to last on-blocks, via
    * `dutyTimes.ts#computeReportTime`/`computeDutyMinutes`) for the calendar
    * day this leg belongs to. Every leg flown the same day shares this same
@@ -71,6 +82,7 @@ export function buildPairingTimelineRows(
   }
 
   const orderedDays = Array.from(legsByDay.keys()).sort();
+  const reportLocalTimeByDay = new Map<string, string>();
   const dailyDutyMinutesByDay = new Map<string, number>();
   const cumulativeDutyMinutesByDay = new Map<string, number>();
   let runningCumulative = 0;
@@ -79,10 +91,13 @@ export function buildPairingTimelineRows(
     const legsThatDay = [...legsByDay.get(date)!].sort(
       (a, b) => a.instance.depUTC.getTime() - b.instance.depUTC.getTime()
     );
-    const reportUTC = computeReportTime(legsThatDay[0].instance.depUTC).reportUTC;
+    const firstLeg = legsThatDay[0];
+    const reportUTC = computeReportTime(firstLeg.instance.depUTC).reportUTC;
     const lastOnBlocksUTC = legsThatDay[legsThatDay.length - 1].instance.arrUTC;
     const dutyMinutes = computeDutyMinutes(reportUTC, lastOnBlocksUTC);
+    const firstLegDepTz = airportTimeZones[firstLeg.instance.depIata] ?? 'UTC';
 
+    reportLocalTimeByDay.set(date, formatLocalHHMM(reportUTC, firstLegDepTz));
     dailyDutyMinutesByDay.set(date, dutyMinutes);
     runningCumulative += dutyMinutes;
     cumulativeDutyMinutesByDay.set(date, runningCumulative);
@@ -102,6 +117,7 @@ export function buildPairingTimelineRows(
       arrLocalTime: formatLocalHHMM(leg.instance.arrUTC, arrTz),
       blockTimeMin: leg.instance.blockTimeMin,
       layoverBeforeMinutes: leg.layoverMinutesBeforeThisLeg,
+      reportLocalTime: reportLocalTimeByDay.get(leg.instance.serviceDate) ?? '',
       dailyDutyMinutes: dailyDutyMinutesByDay.get(leg.instance.serviceDate) ?? 0,
       cumulativeDutyMinutes: cumulativeDutyMinutesByDay.get(leg.instance.serviceDate) ?? 0,
     };

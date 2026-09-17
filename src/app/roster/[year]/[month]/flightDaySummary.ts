@@ -41,7 +41,14 @@ import { buildPairingTimelineRows, type PairingTimelineRow } from './pairing/[pa
  * being omitted entirely.
  */
 export type FlightDaySummary =
-  | { category: 'FLIGHT'; route: string; blockMinutes: number; dutyMinutes: number }
+  | {
+      category: 'FLIGHT';
+      route: string;
+      /** Local ('HH:MM', the day's first departure station's timezone) report time — see `pairingTimelineData.ts#PairingTimelineRow.reportLocalTime`. */
+      reportLocalTime: string;
+      blockMinutes: number;
+      dutyMinutes: number;
+    }
   | { category: 'LAYOVER'; atIata: string; layoverMinutes: number };
 
 /**
@@ -77,8 +84,9 @@ export function buildFlightDaySummaryMap(
       const route = [dayRows[0].depIata, ...dayRows.map((row) => row.arrIata)].join('→');
       const blockMinutes = dayRows.reduce((sum, row) => sum + row.blockTimeMin, 0);
       const dutyMinutes = dayRows[0].dailyDutyMinutes;
+      const reportLocalTime = dayRows[0].reportLocalTime;
 
-      map.set(day.date, { category: 'FLIGHT', route, blockMinutes, dutyMinutes });
+      map.set(day.date, { category: 'FLIGHT', route, reportLocalTime, blockMinutes, dutyMinutes });
       continue;
     }
 

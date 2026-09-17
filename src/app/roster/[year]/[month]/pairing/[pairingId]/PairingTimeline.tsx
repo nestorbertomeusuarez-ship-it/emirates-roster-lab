@@ -50,6 +50,7 @@ export default function PairingTimeline({ rows, worstSeverityByDate }: PairingTi
       <thead>
         <tr className="text-left text-zinc-500 border-b">
           <th className="py-1 pr-2">Date</th>
+          <th className="py-1 pr-2">Report</th>
           <th className="py-1 pr-2">Flight</th>
           <th className="py-1 pr-2">Route</th>
           <th className="py-1 pr-2">Dep (local)</th>
@@ -83,6 +84,9 @@ export default function PairingTimeline({ rows, worstSeverityByDate }: PairingTi
                 ) : (
                   ''
                 )}
+              </td>
+              <td className="py-1 pr-2 align-top whitespace-nowrap">
+                {showDate ? row.reportLocalTime : ''}
               </td>
               <td className="py-1 pr-2 align-top whitespace-nowrap">{row.flightNumber}</td>
               <td className="py-1 pr-2 align-top whitespace-nowrap">
