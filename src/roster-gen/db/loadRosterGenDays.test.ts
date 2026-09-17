@@ -1,9 +1,9 @@
 /**
- * Integration test: reconstructs a `RosterGenDay[]` from a REAL mixed
- * persisted roster month (some FLIGHT via a real generated pairing, some
- * explicit OFF, at least one STANDBY) against the real seeded SQLite DB —
- * same pattern as `src/roster-gen/db/rosterGen.test.ts` (imports `prisma`
- * from `@/lib/prisma`, no mocking).
+ * Integration test: reconstructs a `RosterGenDay[]` from a mixed persisted
+ * roster month (a real generated pairing, an explicit OFF, and a STANDBY)
+ * against the real seeded SQLite DB — same pattern as
+ * `src/roster-gen/db/rosterGen.test.ts` (imports `prisma` from
+ * `@/lib/prisma`, no mocking).
  *
  * This is Phase 5 Slice 1's actual point: proving `loadRosterGenDaysForMonth`
  * plugs a persisted roster into the real `evaluateRosterDays()` evaluator —
@@ -11,40 +11,40 @@
  * `toFlightDutyPeriod.test.ts` integration test (PLAN.md), which proved the
  * FORWARD direction (a freshly generated pairing -> evaluateDuty()).
  *
- * DATA-SAFETY FIX (2026-09-17): this test used to hardcode OFF_DATE=Oct 1 /
- * STANDBY_DATE=Oct 4 and only checked that its chosen FLIGHT candidate's
- * *start* date avoided them — not its full multi-day span, and not whatever
- * a real user might already have assigned elsewhere in October (this app's
- * one real user actively assigns/regenerates real rosters against this same
- * shared dev DB). A real near-miss happened this session: a live-generated
- * roster occupied Oct 1, and this test's own `clearRosterEntry`+`finally`
- * cleanup would have deleted it and never restored it. Fixed by querying
- * `listRosterEntries` FIRST and dynamically picking a FLIGHT candidate
- * (full span) plus two standalone OFF/STANDBY dates that are ALL
- * confirmed free — this test now never touches a pre-existing entry at
- * all, so there is nothing to restore. Still restricted to the first half
- * of the month (day <= 15) so this file's writes can't collide with
- * `src/pairing/db/loadPairing.test.ts`'s second-half-of-month writes
- * against the same shared RosterMonth row.
+ * SELF-CONTAINED SYNTHETIC FIXTURE (2026-09-18, docs item 25's own review):
+ * this test used to depend on finding a free date span in the real seeded
+ * Oct 2026 schedule (the only month with real flight data) — see a real
+ * data-loss near-miss this same session's earlier "DATA-SAFETY FIX" fixed
+ * by querying existing entries first. That fix made the test SAFE, but not
+ * ROBUST: as the roster generator got better at filling the whole month
+ * (items 20-23), this test started failing more and more often purely
+ * because the user's own real roster left no free span — not a regression.
+ * Fixed properly by giving this test its OWN dedicated synthetic month
+ * (2099-01, `ZZ1`/`ZZ2` — IATA codes containing a digit, guaranteed never
+ * to collide with a real all-alphabetic code or with
+ * `src/pairing/db/loadPairing.test.ts`'s own disjoint 2099-02/`ZZ3`/`ZZ4`
+ * fixture if both files run in parallel — `vitest.config.ts` has no
+ * `fileParallelism: false`). `Airport`/`Flight` rows are created directly
+ * in `beforeAll` (bypassing the real seed script entirely) and torn down in
+ * `afterAll`, scoped strictly to the IDs this file itself created — this
+ * test no longer depends on, or can ever affect, the real Oct 2026 data or
+ * the user's real roster.
  */
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { generatePairingsForMonth } from '@/pairing/db/pairings';
-import {
-  assignPairingDuty,
-  assignSimpleDuty,
-  clearRosterEntry,
-  getOrCreateRosterMonth,
-  listRosterEntries,
-} from '@/pairing/db/roster';
+import { assignPairingDuty, assignSimpleDuty, getOrCreateRosterMonth } from '@/pairing/db/roster';
 import { getAirportTimeZones } from '@/lib/airportTimeZones';
 import { evaluateRosterDays } from '../generateMonthlyRoster';
 import { loadRosterGenDaysForMonth } from './loadRosterGenDays';
 
-const YEAR = 2026;
-const MONTH = 10;
+const YEAR = 2099;
+const MONTH = 1;
 const DAYS_IN_MONTH = new Date(Date.UTC(YEAR, MONTH, 0)).getUTCDate();
-const FIRST_HALF_LAST_DAY = 15;
+const HOME_IATA = 'ZZ1';
+const DEST_IATA = 'ZZ2';
+const OFF_DATE = `${YEAR}-01-05`;
+const STANDBY_DATE = `${YEAR}-01-06`;
 
 function addDaysIso(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00.000Z`);
@@ -52,73 +52,79 @@ function addDaysIso(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-describe('loadRosterGenDaysForMonth — real seeded DB', () => {
+let flightOutId: string;
+let flightRetId: string;
+
+beforeAll(async () => {
+  const [home, dest] = await Promise.all([
+    prisma.airport.create({
+      data: { iata: HOME_IATA, name: 'Fixture Home (test-only)', lat: 0, lon: 0, tz: 'UTC' },
+    }),
+    prisma.airport.create({
+      data: { iata: DEST_IATA, name: 'Fixture Dest (test-only)', lat: 0, lon: 0, tz: 'UTC' },
+    }),
+  ]);
+
+  // Daily out (day X, 06:00 UTC, 5h block) + return (~20h layover, lands
+  // day X+1) — a 2-day pairing every day of the fixture month, matching the
+  // original test's preference for a multi-day candidate to exercise
+  // FLIGHT continuation-day expansion.
+  const out = await prisma.flight.create({
+    data: {
+      number: 'ZZ100',
+      depAirportId: home.id,
+      arrAirportId: dest.id,
+      stdUTCMin: 6 * 60,
+      staUTCMin: 11 * 60,
+      arrivalDayOffset: 0,
+      blockTimeMin: 300,
+      advertisedType: 'A350',
+      daysOfWeek: '1111111',
+      effectiveFrom: new Date(`${YEAR}-01-01T00:00:00.000Z`),
+      effectiveTo: new Date(`${YEAR}-01-31T00:00:00.000Z`),
+      source: 'MANUAL_JSON',
+    },
+  });
+  const ret = await prisma.flight.create({
+    data: {
+      number: 'ZZ200',
+      depAirportId: dest.id,
+      arrAirportId: home.id,
+      stdUTCMin: 7 * 60, // 07:00 UTC next day (~20h after the out leg's 11:00 UTC arrival)
+      staUTCMin: 12 * 60,
+      arrivalDayOffset: 1,
+      blockTimeMin: 300,
+      advertisedType: 'A350',
+      daysOfWeek: '1111111',
+      effectiveFrom: new Date(`${YEAR}-01-01T00:00:00.000Z`),
+      effectiveTo: new Date(`${YEAR}-01-31T00:00:00.000Z`),
+      source: 'MANUAL_JSON',
+    },
+  });
+  flightOutId = out.id;
+  flightRetId = ret.id;
+});
+
+afterAll(async () => {
+  await prisma.flightInstance.deleteMany({ where: { flightId: { in: [flightOutId, flightRetId] } } });
+  await prisma.flight.deleteMany({ where: { id: { in: [flightOutId, flightRetId] } } });
+  await prisma.airport.deleteMany({ where: { iata: { in: [HOME_IATA, DEST_IATA] } } });
+});
+
+describe('loadRosterGenDaysForMonth — synthetic fixture month', () => {
   it('reconstructs FLIGHT continuation days, maps OFF/STANDBY correctly, and plugs into evaluateRosterDays()', async () => {
     const rosterMonth = await getOrCreateRosterMonth(prisma, YEAR, MONTH);
 
-    // Build the set of dates already occupied by a REAL pre-existing entry
-    // (start day) or by a multi-day FLIGHT entry's span — never touch any
-    // of these.
-    const existingEntries = await listRosterEntries(prisma, rosterMonth.id);
-    const occupied = new Set<string>();
-    for (const entry of existingEntries) {
-      const iso = entry.date.toISOString().slice(0, 10);
-      const span = entry.dutyType === 'FLIGHT' && entry.spansDays ? entry.spansDays : 1;
-      for (let k = 0; k < span; k += 1) {
-        occupied.add(addDaysIso(iso, k));
-      }
-    }
-
-    // No fleetTypes filter — this test only needs SOME real pairing to
-    // round-trip through the evaluator, and widening the candidate pool
-    // improves the odds of finding a span the real user's actual roster
-    // hasn't already occupied (see the data-safety fix note above).
     const candidates = await generatePairingsForMonth(prisma, YEAR, MONTH, {
       maxTripDays: 4,
       minLayoverMinutes: 8 * 60,
       maxLayoverMinutes: 48 * 60,
+      homeBase: HOME_IATA,
     });
-
-    const isFreeSpan = (startIso: string, tripDays: number): boolean => {
-      if (Number(startIso.slice(8, 10)) + tripDays - 1 > FIRST_HALF_LAST_DAY) return false;
-      for (let k = 0; k < tripDays; k += 1) {
-        if (occupied.has(addDaysIso(startIso, k))) return false;
-      }
-      return true;
-    };
-
-    const candidate =
-      candidates.find((p) => p.tripDays >= 2 && isFreeSpan(p.startServiceDate, p.tripDays)) ??
-      candidates.find((p) => isFreeSpan(p.startServiceDate, p.tripDays));
+    const candidate = candidates.find((p) => p.startServiceDate === `${YEAR}-01-01`);
     if (!candidate) {
-      throw new Error(
-        'No candidate pairing has a fully free span in the first half of the real seeded Oct ' +
-          '2026 schedule — the real user roster currently occupies every day in that range. This ' +
-          'is expected (not a bug) when the real month is fully generated; re-run once it has a ' +
-          'gap, or see the data-safety note at the top of this file.'
-      );
+      throw new Error('Test fixture assumption broken: no candidate pairing starting 2099-01-01.');
     }
-    for (let k = 0; k < candidate.tripDays; k += 1) {
-      occupied.add(addDaysIso(candidate.startServiceDate, k));
-    }
-
-    // Pick two more standalone free dates, distinct from the candidate's
-    // span and each other, for the explicit-OFF and STANDBY fixtures.
-    const freeDates: string[] = [];
-    for (let day = 1; day <= FIRST_HALF_LAST_DAY && freeDates.length < 2; day += 1) {
-      const iso = `${YEAR}-${String(MONTH).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      if (!occupied.has(iso)) {
-        freeDates.push(iso);
-        occupied.add(iso);
-      }
-    }
-    if (freeDates.length < 2) {
-      throw new Error(
-        'Test fixture assumption broken: fewer than 2 free standalone dates in the first half of ' +
-          'the real seeded Oct 2026 schedule — adjust this test fixture.'
-      );
-    }
-    const [OFF_DATE, STANDBY_DATE] = freeDates;
 
     const flightStart = new Date(`${candidate.startServiceDate}T00:00:00.000Z`);
     const offDate = new Date(`${OFF_DATE}T00:00:00.000Z`);
@@ -179,12 +185,10 @@ describe('loadRosterGenDaysForMonth — real seeded DB', () => {
         expect(typeof dated.evaluation.message).toBe('string');
       }
     } finally {
-      // Every date touched here was confirmed free of any pre-existing
-      // entry before this test wrote to it — clearing is always safe,
-      // never a loss of real data.
-      await clearRosterEntry(prisma, rosterMonth.id, flightStart);
-      await clearRosterEntry(prisma, rosterMonth.id, offDate);
-      await clearRosterEntry(prisma, rosterMonth.id, standbyDate);
+      // This fixture month is exclusively this test's own — safe to remove
+      // the whole RosterMonth (cascades its RosterEntry rows) and the
+      // Pairing (cascades its PairingLeg rows) unconditionally.
+      await prisma.rosterMonth.delete({ where: { id: rosterMonth.id } });
       if (pairingId) {
         await prisma.pairing.delete({ where: { id: pairingId } });
       }
