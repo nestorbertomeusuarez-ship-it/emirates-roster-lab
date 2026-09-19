@@ -67,8 +67,14 @@
  * (`haulType.ts#classifyHaulType`) AND the destination station axes at
  * once — see the "DESTINATION MIX" section below (docs item 26);
  * `MAX_FLYING` prefers the smaller block-time candidate (more distinct
- * flying days for the same budget); `MAX_DAYS_OFF` prefers the bigger
- * block-time candidate (fewer trips, more days off).
+ * flying days for the same budget) ONCE the month has reached
+ * `targetBlockMinutesMin` — while still below that floor, it prefers the
+ * BIGGER candidate instead, same direction as `MAX_DAYS_OFF`, to actually
+ * catch up to the floor rather than starving the month at a fraction of
+ * the target range (docs item 29 — see `orderCandidatesByStrategy`'s own
+ * doc comment for why "smallest block time" alone doesn't track budget
+ * usage). `MAX_DAYS_OFF` prefers the bigger block-time candidate
+ * unconditionally (fewer trips, more days off).
  * This never changes (a)/(b)/(c) above — the budget filter and strategy
  * ordering only narrow/reorder which already-legal candidate is tried
  * first among the day's eligible options. See
@@ -848,10 +854,26 @@ function orderCandidatesByStrategy(
   candidates: GeneratedPairing[],
   strategy: GenerationStrategy,
   haulTypeCountsSoFar: Record<HaulType, number>,
-  destinationCountsSoFar: Record<string, number>
+  destinationCountsSoFar: Record<string, number>,
+  belowMinFloor: boolean
 ): GeneratedPairing[] {
   if (strategy === 'MAX_FLYING') {
-    return [...candidates].sort((a, b) => pairingBlockMinutes(a) - pairingBlockMinutes(b));
+    // Docs item 29: while the month hasn't yet reached targetBlockMinutesMin
+    // (the same `belowMinFloor` signal item 23's pacing suppression already
+    // uses), always preferring the SMALLEST candidate can starve the whole
+    // month at a fraction of the target range — a mandatory 8h+ layover
+    // makes even a tiny-block short-hop occupy as many calendar days as a
+    // much bigger trip, so "smallest block time" and "fewest wasted days"
+    // are not the same thing, and nothing here was tracking whether the
+    // month was actually using its budget. Catching up to the floor takes
+    // priority (same direction as MAX_DAYS_OFF below); only once the floor
+    // is met does this revert to preferring the smallest candidate, which
+    // is where "more distinct flying days for the same budget" actually
+    // holds — the remaining headroom under the ceiling gets spread across
+    // more, smaller trips instead of being left unused.
+    return belowMinFloor
+      ? [...candidates].sort((a, b) => pairingBlockMinutes(b) - pairingBlockMinutes(a))
+      : [...candidates].sort((a, b) => pairingBlockMinutes(a) - pairingBlockMinutes(b));
   }
   if (strategy === 'MAX_DAYS_OFF') {
     return [...candidates].sort((a, b) => pairingBlockMinutes(b) - pairingBlockMinutes(a));
@@ -1054,7 +1076,8 @@ export function generateMonthlyRoster(
         eligibleCandidates,
         generationStrategy,
         haulTypeCountsSoFar,
-        destinationCountsSoFar
+        destinationCountsSoFar,
+        belowMinFloor
       );
       for (const candidate of orderedCandidates) {
         if (dayIndex0 + candidate.tripDays > daysInMonth) continue; // wouldn't fit in the month

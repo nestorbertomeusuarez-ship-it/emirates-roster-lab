@@ -1576,3 +1576,85 @@ fixtures) keeps compiling unmodified, since the new field defaults to
 site to supply it. No `GenerateMonthlyRosterInput`/`CumulativeTotals`
 change needed beyond removing the now-dead field — this correction is a
 strict simplification relative to item 27, not an expansion.
+
+## 29. MAX_FLYING could starve the whole month at a fraction of the target range
+
+Direct user feedback: *"los botones de max flying max days off y generate
+roster hacen cosas raras"* (the Max flying / Max days off / Generate
+roster buttons do weird things). Reproduced directly against the live
+dev server (curl against the server action itself, since Playwright's
+browser bridge wasn't installed in this environment) for A350, Oct 2026,
+target range 70-90h:
+
+| Strategy | Flight days | Total block | Pairings |
+|---|---|---|---|
+| Generate roster (MIX) | 23 | 84.5h | 9 |
+| **Max flying** | 24 | **18h** | 9 |
+| Max days off | 14 | 89.5h | 5 |
+
+"Max flying" landed at barely a quarter of the 70h floor — the opposite
+of what the label promises.
+
+### Root cause
+
+`orderCandidatesByStrategy` (`src/roster-gen/generateMonthlyRoster.ts`)
+sorted `MAX_FLYING`'s eligible candidates by ascending
+`pairingBlockMinutes` UNCONDITIONALLY — always take the smallest — with
+no awareness at all of whether the month was actually using its
+`targetBlockMinutesMin`/`Max` budget. "Smallest total block minutes" and
+"smallest calendar-day footprint" are NOT the same thing: a route whose
+mandatory minimum layover (8h+ in the UI's own `UI_PAIRING_CONSTRAINTS`)
+forces a 2-day trip can have far less actual block time than a 1-day
+route with a short layover, so always preferring the former greedily,
+every single eligible day, all month, systematically under-uses the
+available budget. `MAX_DAYS_OFF` (descending — always the biggest) does
+not suffer the mirror problem, since its greedy direction naturally tends
+toward (and in practice reaches, even overshoots down to the ceiling)
+the target range rather than away from it — its own "weirdness"
+(`NO_ELIGIBLE_CANDIDATE: 15` of its 17 OFF days, rather than deliberate
+pacing) is a self-consistent side effect of racing to the ceiling early,
+not a wrong outcome relative to its own name, so it was left unchanged.
+
+### What changed
+
+`orderCandidatesByStrategy` gained a 5th parameter, `belowMinFloor: boolean`
+— the SAME signal `evaluateRosterDays`'s caller already computes each
+loop iteration for item 23's own pacing-suppression logic
+(`targetBlockMinutesMin != null && runningBlockMinutesSoFar < targetBlockMinutesMin`),
+now threaded one call further. `MAX_FLYING` now sorts DESCENDING (same
+direction as `MAX_DAYS_OFF`) while `belowMinFloor` is true — catching up
+to the floor takes priority over spreading into more, smaller trips.
+Once the floor is met, it reverts to its original ascending order,
+which is where "more distinct flying days for the same budget" actually
+holds: the remaining headroom under the ceiling gets spread across more,
+smaller trips instead of sitting unused. When `targetBlockMinutesMin` is
+left unset, `belowMinFloor` is always `false`, so `MAX_FLYING` behaves
+exactly as before — a strict extension, not a redesign, of the existing
+strategy.
+
+Re-run against the live Oct 2026 A350 data after the fix: Max flying ->
+22 flight days, **86.7h** (was 18h), 8 pairings, 0 RED — now solidly
+within the 70-90h range and comparable to the other two strategies,
+instead of a wild outlier.
+
+### Verification
+
+New tests in `generateMonthlyRoster.test.ts`'s `generationStrategy`
+describe block: a synthetic fixture with a TINY-block/2-day-footprint
+route alongside a BIG-block/1-day-footprint route (the exact real-world
+shape that exposed the bug) — asserts `MAX_FLYING` now reaches the 80h
+floor without exceeding the 90h ceiling and with zero RED; a companion
+test confirms `MAX_FLYING` still prefers the smallest candidate once the
+floor is already met (`targetBlockMinutesMin: 0`), proving the fix only
+changes behavior while genuinely behind pace. Full suite 344/344
+(up from 342 — 2 new tests, no existing test needed touching, since every
+`generationStrategy: 'MAX_FLYING'` test either had no floor set or was
+scoped to day-1 ordering only). `npx tsc --noEmit` and `npm run lint`
+clean.
+
+### Wiring
+
+`orderCandidatesByStrategy` is a private (non-exported) function — its
+new parameter only required updating its single call site inside
+`generateMonthlyRoster`'s construction loop, which already had
+`belowMinFloor` in scope. No public API, type, or DB-layer change.

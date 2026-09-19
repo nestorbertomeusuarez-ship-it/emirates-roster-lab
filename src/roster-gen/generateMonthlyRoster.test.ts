@@ -594,6 +594,57 @@ describe('generateMonthlyRoster — generationStrategy', () => {
     expect(firstFlightDayPairingBlockMinutes(result.days)).toBe(MAX_ROUTE_BLOCK_MINUTES);
   });
 
+  it('MAX_FLYING still prefers the smaller candidate once the target floor is already met (docs item 29)', () => {
+    const pairings = buildFixturePairings('A350');
+    const result = generateMonthlyRoster({
+      ...baseInput,
+      pairings,
+      generationStrategy: 'MAX_FLYING',
+      targetBlockMinutesMin: 0, // floor met from minute one — belowMinFloor stays false throughout
+      targetBlockMinutesMax: 90 * 60,
+    });
+    expect(firstFlightDayPairingBlockMinutes(result.days)).toBe(MIN_LEGAL_DAY1_BLOCK_MINUTES);
+  });
+
+  it('MAX_FLYING no longer starves the month below the target floor (docs item 29 — real bug this fixes)', () => {
+    // Reproduces the real shape that exposed this bug: a TINY-block route
+    // (60min total) whose mandatory layover still gives it a 2-day
+    // calendar footprint, alongside a BIG-block route (800min) with a
+    // short layover and only a 1-day footprint. The OLD MAX_FLYING
+    // ordering (always the smallest RAW block-minutes candidate, no
+    // regard for its calendar-day cost) would greedily pick TINY every
+    // eligible day and starve the whole month at a fraction of the
+    // 80-90h target range — exactly what a real live-data run did
+    // (18h actual vs. an 70-90h target).
+    const instances = [
+      ...buildDailyRoute('SSS', 2, 30, 24, 30, 'A350'), // TINY: 60min block, ~2-day footprint
+      ...buildDailyRoute('LLL', 8, 400, 4, 400, 'A350'), // BIG: 800min block, 1-day footprint
+    ];
+    const pairings = generatePairings(instances, {
+      homeBase: 'DXB',
+      maxTripDays: 3,
+      minLayoverMinutes: 2 * 60,
+      maxLayoverMinutes: 32 * 60,
+      fleetTypes: ['A350'],
+    });
+
+    const result = generateMonthlyRoster({
+      fleetType: 'A350',
+      year: YEAR,
+      month: MONTH,
+      pairings,
+      airportTimeZones: AIRPORT_TZS,
+      generationStrategy: 'MAX_FLYING',
+      targetBlockMinutesMin: 80 * 60,
+      targetBlockMinutesMax: 90 * 60,
+    });
+
+    expect(result.summary.totalBlockMinutes).toBeGreaterThanOrEqual(80 * 60);
+    expect(result.summary.totalBlockMinutes).toBeLessThanOrEqual(90 * 60);
+    const reds = result.evaluations.filter((e) => e.evaluation.severity === 'RED');
+    expect(reds).toEqual([]);
+  });
+
   it('MIX balances haul-type assignment across the month instead of exhausting one type first', () => {
     const pairings = buildHaulMixPairings('A350');
     const result = generateMonthlyRoster({
