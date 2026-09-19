@@ -28,7 +28,7 @@ import type {
 import { factoredSectors } from './rules/sectorFactoring';
 import { FDP_TABLE_CITATION, maxFdpMinutes } from './rules/fdpTables';
 import { evaluateInFlightRest, IN_FLIGHT_REST_CITATION } from './rules/inFlightRest';
-import { evaluateMinRest } from './rules/minRest';
+import { evaluateLocalNightAfterExtendedDuty, evaluateMinRest } from './rules/minRest';
 import { evaluateCumulativeLimits } from './rules/cumulativeLimits';
 import { evaluateDaysOff } from './rules/daysOff';
 import {
@@ -160,6 +160,10 @@ export function evaluateDuty(
 
   if (rest !== null) {
     evaluations.push(evaluateMinRest(rest));
+    const localNightEvaluation = evaluateLocalNightAfterExtendedDuty(rest);
+    if (localNightEvaluation !== null) {
+      evaluations.push(localNightEvaluation);
+    }
   }
 
   if (cumulative !== null) {

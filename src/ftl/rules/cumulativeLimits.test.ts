@@ -12,7 +12,6 @@ const baseTotals: CumulativeTotals = {
   daysOffLast14: 2,
   daysOffLast28: 7,
   avgDaysOffPer28dOver3Periods: 8,
-  hoursSinceLastQualifyingExtendedRecoveryRest: 0,
 };
 
 describe('evaluateCumulativeLimits', () => {

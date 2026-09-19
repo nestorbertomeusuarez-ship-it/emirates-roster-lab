@@ -11,6 +11,15 @@
  *   >=10h; this reduction never applies once earned rest exceeds 12h.
  * - At home base, discretion may reduce rest by up to 1h but never below
  *   12h.
+ * - ORO.FTL.225.G(e): "If the preceding duty period, which includes any
+ *   time spent on positioning, exceeded 18 hours, then the ensuing rest
+ *   period must include a local night." A local night is an 8-hour period
+ *   falling between 2200 and 0800 local time (see `src/ftl/localNight.ts`).
+ *   Independently verified against the primary GCAA source PDF (CAR-AIR
+ *   OPS Part-ORO Issue 03) — see docs/gcaa-sources.md and
+ *   docs/roster-gen-assumptions.md item 28. No cabin-crew equivalent was
+ *   found in the verified text, so this sub-check is flight-crew only (see
+ *   `evaluateLocalNightAfterExtendedDuty` below).
  *
  * Cabin crew (ORO.FTL.265.G(b)): the greater of (a) preceding duty period
  * minus 1h, or (b) 11h. At-base discretion floor: 11h. (The public text
@@ -32,11 +41,18 @@ export const MIN_REST_CABIN_CREW_CITATION = gcaaCitation(
   'ORO.FTL.265.G(b)'
 );
 
+export const MIN_REST_LOCAL_NIGHT_CITATION = gcaaCitation(
+  'gcaa-min-rest-local-night-after-extended-duty',
+  'ORO.FTL.225.G(e)'
+);
+
 const TWELVE_HOURS_MIN = 12 * 60;
 const ELEVEN_HOURS_MIN = 11 * 60;
 const AWAY_FROM_BASE_TRAVEL_ALLOWANCE_EACH_WAY_MIN = 30;
 const AWAY_FROM_BASE_TOTAL_TRAVEL_ALLOWANCE_MIN = 60;
 const AWAY_FROM_BASE_REDUCTION_MIN = 60;
+/** ORO.FTL.225.G(e)'s trigger: a preceding duty exceeding this requires the ensuing rest to include a local night. */
+const EXTENDED_DUTY_LOCAL_NIGHT_TRIGGER_MINUTES = 18 * 60;
 
 export interface MinRestInput {
   precedingDutyMinutes: number;
@@ -48,6 +64,13 @@ export interface MinRestInput {
   earnedRestMinutes: number;
   /** Minutes of home-base discretion reduction applied (flight crew only). */
   atBaseDiscretionAppliedMinutes?: number;
+  /**
+   * Whether the rest period given actually includes a local night (see
+   * `src/ftl/localNight.ts`'s `restPeriodIncludesLocalNight`) — only
+   * relevant when `precedingDutyMinutes` exceeds 18h (ORO.FTL.225.G(e)).
+   * `undefined` = not yet computed/known.
+   */
+  restIncludesLocalNight?: boolean;
 }
 
 function requiredMinRestFlightCrewMinutes(input: MinRestInput): number {
@@ -148,5 +171,46 @@ export function evaluateMinRest(input: MinRestInput): RuleEvaluation {
     severity: 'GREEN',
     message: `Earned rest (${input.earnedRestMinutes} min) meets the required minimum (${requiredMinutes} min) for ${input.role}.`,
     marginMinutes,
+  };
+}
+
+/**
+ * ORO.FTL.225.G(e): if the preceding duty period exceeded 18h, the ensuing
+ * rest period must include a local night. Flight crew only — no cabin-crew
+ * equivalent was found in the verified primary text.
+ *
+ * Returns `null` when the trigger doesn't apply (preceding duty <=18h, or
+ * cabin crew) — callers only surface a result when this returns non-null,
+ * the same conditional-push pattern `src/ftl/evaluate.ts` already uses for
+ * the in-flight-rest extension.
+ */
+export function evaluateLocalNightAfterExtendedDuty(
+  input: MinRestInput
+): RuleEvaluation | null {
+  if (input.role !== 'FLIGHT_CREW') return null;
+  if (input.precedingDutyMinutes <= EXTENDED_DUTY_LOCAL_NIGHT_TRIGGER_MINUTES) {
+    return null;
+  }
+
+  if (input.restIncludesLocalNight === undefined) {
+    return {
+      citation: MIN_REST_LOCAL_NIGHT_CITATION,
+      severity: 'AMBER',
+      message: `Preceding duty (${input.precedingDutyMinutes} min) exceeded 18h, so the ensuing rest must include a local night — not yet confirmed whether it does.`,
+    };
+  }
+
+  if (!input.restIncludesLocalNight) {
+    return {
+      citation: MIN_REST_LOCAL_NIGHT_CITATION,
+      severity: 'RED',
+      message: `Preceding duty (${input.precedingDutyMinutes} min) exceeded 18h; the ensuing rest does not include a local night, as required.`,
+    };
+  }
+
+  return {
+    citation: MIN_REST_LOCAL_NIGHT_CITATION,
+    severity: 'GREEN',
+    message: `Preceding duty (${input.precedingDutyMinutes} min) exceeded 18h; the ensuing rest includes a local night, as required.`,
   };
 }

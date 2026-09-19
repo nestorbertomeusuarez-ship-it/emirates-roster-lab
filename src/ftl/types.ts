@@ -100,6 +100,15 @@ export interface RestPeriodInput {
   earnedRestMinutes: number;
   /** Minutes of home-base discretion reduction applied, if any (flight crew only). */
   atBaseDiscretionAppliedMinutes?: number;
+  /**
+   * Whether the rest period given actually includes a local night (see
+   * `src/ftl/localNight.ts`'s `restPeriodIncludesLocalNight`) — only
+   * relevant when `precedingDutyMinutes` exceeds 18h (ORO.FTL.225.G(e)).
+   * `undefined` = not yet computed/known (evaluated as AMBER, never
+   * silently assumed to pass or fail — see
+   * `evaluateLocalNightAfterExtendedDuty` in `src/ftl/rules/minRest.ts`).
+   */
+  restIncludesLocalNight?: boolean;
 }
 
 export interface CumulativeTotals {
@@ -124,14 +133,6 @@ export interface CumulativeTotals {
   daysOffLast14: number;
   daysOffLast28: number;
   avgDaysOffPer28dOver3Periods: number;
-  /**
-   * Hours elapsed since the end of the most recent "recurrent extended
-   * recovery rest" period (see `src/ftl/rules/daysOff.ts`'s
-   * `EXTENDED_RECOVERY_REST_*` constants) — or, if none has occurred yet
-   * within the caller's own tracked history, hours since that history's
-   * own start (never fabricated as an immediate violation on day 1).
-   */
-  hoursSinceLastQualifyingExtendedRecoveryRest: number;
 }
 
 /**

@@ -1,54 +1,69 @@
 import { describe, expect, it } from 'vitest';
-import { LOCAL_NIGHT_END_HOUR, LOCAL_NIGHT_START_HOUR, countLocalNightsWithinWindow } from './localNight';
+import {
+  LOCAL_NIGHT_BAND_END_HOUR,
+  LOCAL_NIGHT_BAND_START_HOUR,
+  LOCAL_NIGHT_REQUIRED_HOURS,
+  restPeriodIncludesLocalNight,
+} from './localNight';
 
 // Asia/Dubai is a fixed UTC+4 offset year-round (no daylight saving) —
-// exact UTC instants for local 22:00/06:00 are computable by hand, making
-// this the clearest fixture to verify the night-counting logic against.
+// exact UTC instants for local 22:00/08:00 are computable by hand, making
+// this the clearest fixture to verify the overlap logic against.
 const DXB = 'Asia/Dubai';
 
-describe('countLocalNightsWithinWindow', () => {
-  it('exposes the confirmed 22:00-06:00 local night window', () => {
-    expect(LOCAL_NIGHT_START_HOUR).toBe(22);
-    expect(LOCAL_NIGHT_END_HOUR).toBe(6);
+describe('restPeriodIncludesLocalNight', () => {
+  it('exposes the real GCAA local-night band and required duration', () => {
+    expect(LOCAL_NIGHT_BAND_START_HOUR).toBe(22);
+    expect(LOCAL_NIGHT_BAND_END_HOUR).toBe(8);
+    expect(LOCAL_NIGHT_REQUIRED_HOURS).toBe(8);
   });
 
-  it('counts exactly 2 nights for a window covering exactly 2 full local nights', () => {
-    // Night 1: local 2027-06-01 22:00 -> 2027-06-02 06:00 = UTC 18:00 -> 02:00 (UTC+4).
-    // Night 2: local 2027-06-02 22:00 -> 2027-06-03 06:00 = UTC 18:00 -> 02:00.
+  it('is true when the rest period fully contains the 10h band (22:00-08:00 local)', () => {
+    // Local 2027-06-01 22:00 -> 06-02 08:00 = UTC 18:00 -> 04:00 (UTC+4).
     const start = new Date('2027-06-01T18:00:00.000Z');
-    const end = new Date('2027-06-03T02:00:00.000Z');
-    expect(countLocalNightsWithinWindow(start, end, DXB)).toBe(2);
+    const end = new Date('2027-06-02T04:00:00.000Z');
+    expect(restPeriodIncludesLocalNight(start, end, DXB)).toBe(true);
   });
 
-  it('does not count a night the window only partially covers', () => {
-    // Ends 1 hour before night 2's local 06:00 -> only night 1 is fully covered.
-    const start = new Date('2027-06-01T18:00:00.000Z');
-    const end = new Date('2027-06-03T01:00:00.000Z');
-    expect(countLocalNightsWithinWindow(start, end, DXB)).toBe(1);
+  it('is true at exactly 8h of overlap, not just full 10h containment', () => {
+    // Rest covers local 22:00 -> 06:00 only (8h of the 10h band).
+    const start = new Date('2027-06-01T18:00:00.000Z'); // local 22:00
+    const end = new Date('2027-06-02T02:00:00.000Z'); // local 06:00
+    expect(restPeriodIncludesLocalNight(start, end, DXB)).toBe(true);
   });
 
-  it('extra time before/after a fully-covered night does not manufacture an extra one', () => {
-    const start = new Date('2027-06-01T16:00:00.000Z'); // local 20:00, 2h before night 1 starts
-    const end = new Date('2027-06-03T04:00:00.000Z'); // local 08:00, 2h after night 2 ends
-    expect(countLocalNightsWithinWindow(start, end, DXB)).toBe(2);
+  it('is false at 7h59m of overlap, 1 minute short of a local night', () => {
+    const start = new Date('2027-06-01T18:00:00.000Z'); // local 22:00
+    const end = new Date('2027-06-02T01:59:00.000Z'); // local 05:59
+    expect(restPeriodIncludesLocalNight(start, end, DXB)).toBe(false);
   });
 
-  it('counts 0 for a rest shorter than one full local night', () => {
-    const start = new Date('2027-06-01T20:00:00.000Z'); // local 00:00
-    const end = new Date('2027-06-02T00:00:00.000Z'); // local 04:00 — inside night 1, but doesn't cover its start
-    expect(countLocalNightsWithinWindow(start, end, DXB)).toBe(0);
+  it('is false when the rest period never touches the local-night band at all', () => {
+    // Local 08:00 -> 20:00 the same day — entirely daytime.
+    const start = new Date('2027-06-01T04:00:00.000Z');
+    const end = new Date('2027-06-01T16:00:00.000Z');
+    expect(restPeriodIncludesLocalNight(start, end, DXB)).toBe(false);
   });
 
-  it('returns 0 for an empty or inverted window', () => {
+  it('is false when overlap is split across two separate band instances, neither reaching 8h alone', () => {
+    // Rest: local 03:30 (June 2) -> 16:30 (June 2). Overlaps band instance 1
+    // (June1 22:00 -> June2 08:00) for 4.5h only (03:30->08:00); never
+    // reaches band instance 2 (June2 22:00 onward) at all.
+    const start = new Date('2027-06-01T23:30:00.000Z'); // local 03:30 June 2
+    const end = new Date('2027-06-02T12:30:00.000Z'); // local 16:30 June 2
+    expect(restPeriodIncludesLocalNight(start, end, DXB)).toBe(false);
+  });
+
+  it('returns false for an empty or inverted window', () => {
     const t = new Date('2027-06-01T18:00:00.000Z');
-    expect(countLocalNightsWithinWindow(t, t, DXB)).toBe(0);
-    expect(countLocalNightsWithinWindow(new Date(t.getTime() + 1000), t, DXB)).toBe(0);
+    expect(restPeriodIncludesLocalNight(t, t, DXB)).toBe(false);
+    expect(restPeriodIncludesLocalNight(new Date(t.getTime() + 1000), t, DXB)).toBe(false);
   });
 
   it('works for a different fixed-offset timezone (Asia/Tokyo, UTC+9, no daylight saving)', () => {
-    // Night: local 2027-06-01 22:00 -> 06-02 06:00 = UTC 13:00 -> 21:00 (UTC+9).
+    // Local 22:00 -> 08:00 = UTC 13:00 -> 23:00 (UTC+9).
     const start = new Date('2027-06-01T13:00:00.000Z');
-    const end = new Date('2027-06-01T21:00:00.000Z');
-    expect(countLocalNightsWithinWindow(start, end, 'Asia/Tokyo')).toBe(1);
+    const end = new Date('2027-06-01T23:00:00.000Z');
+    expect(restPeriodIncludesLocalNight(start, end, 'Asia/Tokyo')).toBe(true);
   });
 });

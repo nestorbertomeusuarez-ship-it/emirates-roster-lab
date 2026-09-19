@@ -1354,6 +1354,21 @@ automatically.
 
 ## 27. Recurrent extended recovery rest: >=36h including >=2 local nights, at least once every 168h
 
+**SUPERSEDED by item 28 (2026-09-19).** Once the GCAA primary source PDF
+came back online and was read in full, this entire implementation turned
+out to be based on a wrong regulatory comparison: GCAA's own
+`ORO.FTL.235.G` is "Mixed duties", not a "recurrent extended recovery
+rest" clause — no such recurring 36h/2-local-nights/168h requirement
+exists anywhere in GCAA's published text. Everything this item added
+(`src/ftl/localNight.ts`'s old `countLocalNightsWithinWindow`,
+`daysOff.ts`'s `EXTENDED_RECOVERY_REST_*` constants and
+`isQualifyingExtendedRecoveryRest`, the `gcaa-days-off-extended-recovery-rest`
+sub-check, `CumulativeTotals.hoursSinceLastQualifyingExtendedRecoveryRest`,
+and `generateMonthlyRoster.ts`'s `recoveryRestAnchorUTC` tracking) has been
+**removed**. What follows is kept for history, per this document's own
+"never delete, mark superseded in-place" convention — see item 28 for what
+actually replaced it.
+
 Follow-up to a debrief-time correction (item 9, docs/pairing-assumptions.md):
 the user, verifying the debrief-adjusted rest math, recalled a "local
 nights" requirement and asked for it to be checked against the primary
@@ -1444,3 +1459,120 @@ field (required — every existing direct constructor of a `CumulativeTotals`
 literal needed updating, all in test fixtures). No new
 `GenerateMonthlyRosterInput` field — purely internal to
 `evaluateRosterDays`'s existing rest-tracking machinery.
+
+## 28. Correction: the real local-night rule is ORO.FTL.225.G(e), not a recurring 36h/168h requirement
+
+A background research job (running while other work continued, per the
+user's own earlier instruction: "avisame cuando el sitio de GCAA vuelva,
+de mientras haz research en easa y uk caa") detected that gcaa.gov.ae was
+serving the real document again, rather than the maintenance page. The
+primary PDF was fetched, `WebFetch` couldn't parse its text layer
+("compressed/encoded data"), the `Read` tool's own PDF fallback also
+failed (`pdftoppm` not installed), and `pdftotext` (already present,
+poppler-utils) was used directly via Bash as a third fallback — it worked,
+producing a full verbatim text extraction.
+
+Reading GCAA's actual `ORO.FTL.100.G-270.G` text end to end surfaced two
+corrections to item 27:
+
+1. **The clause comparison was wrong.** GCAA's own `ORO.FTL.235.G` is
+   titled "Mixed duties" — an entirely different provision from EASA's own
+   `ORO.FTL.235` ("Rest Periods", which does contain a recurring extended
+   recovery rest requirement). Same clause number, different regulator,
+   different content — GCAA's numbering genuinely diverges from EASA's
+   here, the same kind of divergence already documented for
+   `fdpTables.ts` in docs/gcaa-sources.md's own 2026-09-15 re-verification
+   note. No recurring 36h/2-local-nights/168h requirement exists anywhere
+   in GCAA's published FTL text.
+2. **The real rule is different and simpler.** `ORO.FTL.225.G(e)` (page
+   ~441): "If the preceding duty period, which includes any time spent on
+   positioning, exceeded 18 hours, then the ensuing rest period must
+   include a local night." A per-instance trigger tied to THIS duty's own
+   length, not a recurring cadence needing month-long anchor tracking.
+3. **GCAA's own "local night" definition also differs** from what the
+   pilot had separately confirmed while the source was unreachable: "A
+   period of 8 hours falling between 2200 hours and 0800 hours local
+   time" — an 8h period *somewhere within* the wider 2200-0800 band, not a
+   fixed 22:00-06:00 slice.
+
+Reported to the user in full, with the exact real clause text quoted; the
+user chose to fix this immediately ("Sí, corregilo ahora (Recomendado)")
+rather than defer it behind the in-progress real-STD-times work.
+
+### What changed
+
+- **`src/ftl/localNight.ts`** rewritten: `countLocalNightsWithinWindow`
+  (counted DISTINCT 22:00-06:00 slices fully contained in a window) is
+  replaced by `restPeriodIncludesLocalNight(restStartUTC, restEndUTC,
+  ianaTimeZone)` — true when the rest period's overlap with the
+  2200-0800 local band, on any local calendar day, reaches
+  `LOCAL_NIGHT_REQUIRED_HOURS` (8) contiguous hours. Since the overlap of
+  two intervals is itself one contiguous interval, ">=8h overlap" is
+  exactly equivalent to "contains an 8h local night" per GCAA's
+  definition.
+- **`src/ftl/rules/daysOff.ts`**: removed
+  `EXTENDED_RECOVERY_REST_MIN_HOURS`,
+  `EXTENDED_RECOVERY_REST_MIN_LOCAL_NIGHTS`,
+  `EXTENDED_RECOVERY_REST_MAX_GAP_HOURS`,
+  `isQualifyingExtendedRecoveryRest`, and the
+  `gcaa-days-off-extended-recovery-rest` sub-check. `evaluateDaysOff` now
+  only implements what's genuinely in `ORO.FTL.205.G`.
+- **`src/ftl/types.ts`**: removed
+  `CumulativeTotals.hoursSinceLastQualifyingExtendedRecoveryRest` (no
+  longer needed — the real rule doesn't need cross-day tracking). Added
+  `RestPeriodInput.restIncludesLocalNight?: boolean` (caller-computed,
+  `undefined` = not yet known, mirrors the existing
+  `includesTwoLocalNights` precedent in `isValidDayOffPeriod`).
+- **`src/ftl/rules/minRest.ts`**: new
+  `evaluateLocalNightAfterExtendedDuty(input: MinRestInput):
+  RuleEvaluation | null` — flight-crew only (no cabin-crew equivalent in
+  the verified text), returns `null` when `precedingDutyMinutes <= 18h`
+  (the trigger doesn't apply), otherwise AMBER
+  (`restIncludesLocalNight` unknown) / RED / GREEN. Kept as a SEPARATE
+  function rather than folding into `evaluateMinRest`'s existing return
+  value — `evaluateMinRest` already has 15+ passing tests asserting a
+  single `RuleEvaluation` return; changing its return type to an array
+  would have forced touching every one of them for no benefit, when
+  `evaluate.ts` already has an established "conditionally push a second,
+  separate evaluation" pattern (the in-flight-rest extension) to reuse
+  instead.
+- **`src/ftl/evaluate.ts`**: `evaluateDuty`'s `if (rest !== null)` block
+  now also calls `evaluateLocalNightAfterExtendedDuty(rest)` and pushes
+  its result only when non-null.
+- **`src/roster-gen/generateMonthlyRoster.ts`**: removed the entire
+  `recoveryRestAnchorUTC` tracking block (the anchor variable, the
+  bootstrap-on-day-1 logic, and the ordering-sensitive
+  qualifies-before-computing-elapsed-hours dance item 27 needed). Building
+  `rest` now simply computes `restIncludesLocalNight` inline via
+  `restPeriodIncludesLocalNight(prevDutyEnd.utc, reportUTC,
+  airportTimeZones[prevDutyEnd.station] ?? 'UTC')` — a pure per-duty
+  computation, no state carried across days. This is a substantially
+  SIMPLER implementation than item 27's, a direct consequence of the real
+  rule being a per-instance check rather than a recurring one.
+
+### Verification
+
+Rewrote `src/ftl/localNight.test.ts` (8 tests) for the new overlap-based
+function. Removed the `EXTENDED_RECOVERY_REST_*`/
+`isQualifyingExtendedRecoveryRest` tests from `daysOff.test.ts`. Added 5
+new tests to `minRest.test.ts` for `evaluateLocalNightAfterExtendedDuty`
+(trigger boundary at exactly 18h, cabin-crew exclusion, AMBER/RED/GREEN).
+Replaced item 27's `generateMonthlyRoster.test.ts` describe block with one
+covering the real rule: RED when a >18h duty's rest doesn't span a local
+night, GREEN when it does, absent entirely when preceding duty is <=18h,
+and a realistic-fixture sanity check that ordinary (never >18h) duties
+never trigger a RED for this rule. `npx tsc --noEmit` clean; full suite
+342/342 passing (down from 344 — item 27 removed more tests than item 28
+added, since the recurring-rule tests needed more fixture scaffolding
+than the simpler per-instance rule does); `npm run lint` clean (aside from
+the pre-existing unrelated `gen-seed-data.mjs` warning).
+
+### Wiring
+
+`RestPeriodInput.restIncludesLocalNight` is optional — every existing
+direct constructor of a `RestPeriodInput`/`MinRestInput` literal (test
+fixtures) keeps compiling unmodified, since the new field defaults to
+`undefined` (AMBER, "not yet confirmed") rather than requiring every call
+site to supply it. No `GenerateMonthlyRosterInput`/`CumulativeTotals`
+change needed beyond removing the now-dead field — this correction is a
+strict simplification relative to item 27, not an expansion.

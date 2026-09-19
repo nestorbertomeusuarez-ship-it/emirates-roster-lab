@@ -1,6 +1,6 @@
 # GCAA flight/duty-time-limitation (FTL) sources
 
-> **Last verified: 2026-09-14.** Re-verify against the primary source
+> **Last verified: 2026-09-19.** Re-verify against the primary source
 > periodically, and immediately if a new CAR-AIR OPS issue is published.
 
 ## Primary source
@@ -43,6 +43,7 @@ in the same document.
 | 6 | In-flight relief / augmented crew rest | ORO.FTL.215.G(e) | `src/ftl/rules/inFlightRest.ts` |
 | 7 | Minimum rest, flight crew | ORO.FTL.225.G | `src/ftl/rules/minRest.ts` |
 | 7 | Minimum rest, cabin crew | ORO.FTL.265.G(b) | `src/ftl/rules/minRest.ts` |
+| 7a | Local night required after a >18h preceding duty | ORO.FTL.225.G(e) | `src/ftl/rules/minRest.ts` (`evaluateLocalNightAfterExtendedDuty`), `src/ftl/localNight.ts` |
 | 8 | Cumulative limits (flight/duty hours) | ORO.FTL.200.G | `src/ftl/rules/cumulativeLimits.ts` |
 | 9 | Duty cycle and days off | ORO.FTL.205.G | `src/ftl/rules/daysOff.ts` |
 
@@ -51,25 +52,62 @@ Every `RuleEvaluation` returned by this engine carries a `citation` field
 consulted above — built via `gcaaCitation()` in `src/ftl/citation.ts` so
 the document/URL/date triple is defined in exactly one place.
 
-### PENDING RE-VERIFICATION — recurrent extended recovery rest
+### RESOLVED (2026-09-19) — "recurrent extended recovery rest" was wrong
 
-`gcaa-days-off-extended-recovery-rest` (`src/ftl/rules/daysOff.ts`,
-`EXTENDED_RECOVERY_REST_*` constants: >=36h including >=2 local nights,
-at least once every 168h) is cited under the same ORO.FTL.205.G clause as
-row 9 above, but — unlike every other row in this table — it was added on
-**direct pilot confirmation only**, not independent re-verification
-against the primary GCAA PDF: the primary source (URL above) was
-unreachable, serving a small maintenance-page response instead of the
-real document, as of 2026-09-19 (confirmed via both WebFetch and `curl
--I`, ~33KB response vs. the real document's expected multi-MB size). The
-user (an actual Emirates line pilot) confirmed GCAA's rule is structurally
-identical to EASA's own ORO.FTL.235 "recurrent extended recovery rest"
-provision (36h/2 local nights/168h — verified against EASA/UK CAA's own
-published text, see `src/ftl/localNight.ts`'s and `daysOff.ts`'s own doc
-comments for that research). **Re-verify against the primary GCAA source
-once reachable** and update this note (and the clause/numbers, if GCAA's
-own text differs from EASA's) — do not remove this note until that
-re-verification has actually happened.
+Earlier the same day, `gcaa-days-off-extended-recovery-rest`
+(`src/ftl/rules/daysOff.ts`) implemented a "recurrent extended recovery
+rest" rule (>=36h including >=2 local nights, at least once every 168h)
+on **direct pilot confirmation only**, while the primary GCAA PDF (URL
+above) was unreachable (serving a ~33KB maintenance-page response instead
+of the real multi-MB document). The pilot confirmed GCAA's rule was
+"structurally identical" to EASA's own ORO.FTL.235 provision of that same
+name — a reasonable basis to build on at the time, but not an
+independently re-verified citation.
+
+Once gcaa.gov.ae came back online, the primary PDF was extracted via
+`pdftotext` and read in full. **The comparison was wrong**: GCAA's own
+`ORO.FTL.235.G` is titled **"Mixed duties"** — an entirely different,
+unrelated provision — not a "recurrent extended recovery rest" clause at
+all. No 36h/2-local-nights/168h recurring requirement exists anywhere in
+GCAA's ORO.FTL.100.G-270.G. That entire sub-check (constants, function,
+`evaluateDaysOff` sub-check, `CumulativeTotals` field, and the
+`generateMonthlyRoster.ts` anchor-tracking machinery it required) was
+**removed**.
+
+What GCAA's real text *does* contain, at **ORO.FTL.225.G(e)** (page ~441
+of the primary PDF), is a much simpler, non-recurring rule:
+
+> "If the preceding duty period, which includes any time spent on
+> positioning, exceeded 18 hours, then the ensuing rest period must
+> include a local night."
+
+— a per-instance trigger, not a monthly cadence. GCAA's own definition of
+"local night" (found in the document's definitions section) also differs
+from what the pilot had separately confirmed while the source was
+unreachable:
+
+> "'Local night': A period of 8 hours falling between 2200 hours and 0800
+> hours local time."
+
+This is an 8-hour period *somewhere within* the wider 10-hour 2200-0800
+band — not a fixed 22:00-06:00 slice, which is what the earlier
+implementation (and the pilot's own good-faith recollection) assumed.
+Both are now implemented correctly: `src/ftl/localNight.ts`'s
+`restPeriodIncludesLocalNight` checks for >=8h of contiguous overlap with
+the 2200-0800 band; `src/ftl/rules/minRest.ts`'s
+`evaluateLocalNightAfterExtendedDuty` implements the real (e) trigger. See
+docs/roster-gen-assumptions.md item 28 for the full implementation
+history, including item 27 (the original, incorrect implementation),
+which is marked superseded in place rather than deleted.
+
+**Lesson for this project**: "the user confirmed it's structurally
+identical to EASA" is a reasonable basis to ship on when the primary
+source is genuinely unreachable, but it is not a substitute for
+independent verification, and should be re-checked at the first
+opportunity — exactly as this file's own process required. GCAA's clause
+numbering and content have already been shown to diverge from EASA's
+elsewhere in this project (see the fdpTables.ts re-verification note
+below): `ORO.FTL.235.G` is the clearest example yet.
 
 ## OPERATOR_SPECIFIC — explicitly NOT publicly available
 
@@ -131,6 +169,10 @@ skipped.
   explicitly for flight crew (ORO.FTL.225.G) but no analogous provision
   for cabin crew (ORO.FTL.265.G(b)) was in the verified text, so none is
   implemented. See `minRest.ts`.
+- **ORO.FTL.225.G(e) (local night after a >18h preceding duty) modeled as
+  flight-crew only.** The clause lives under the flight-crew minimum-rest
+  article; no cabin-crew equivalent was found in the verified text. See
+  `evaluateLocalNightAfterExtendedDuty` in `minRest.ts`.
 
 ## Re-verification note (2026-09-15): `fdpTables.ts`'s sector-column structure
 

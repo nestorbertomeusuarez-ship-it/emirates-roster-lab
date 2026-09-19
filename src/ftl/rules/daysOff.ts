@@ -8,24 +8,17 @@
  * - Minimum 7 days off in any 28 consecutive days.
  * - Average >=8 days off per 28-day period, averaged over 3 such periods.
  * - A "day off" = a period including 2 local nights, minimum 34 hours.
- * - Recurrent extended recovery rest: at least 36 hours including 2 local
- *   nights, occurring at least once every 168 hours (7 days) — see
- *   `EXTENDED_RECOVERY_REST_*` constants below.
  *
- * SOURCE NOTE on the recurrent-extended-recovery-rest sub-check
- * (`gcaa-days-off-extended-recovery-rest`): added on DIRECT PILOT
- * CONFIRMATION (an actual Emirates line pilot, this app's real user,
- * confirming GCAA's rule is structurally identical to EASA's own
- * ORO.FTL.235 "recurrent extended recovery rest" provision) — the primary
- * GCAA source PDF was unreachable (gcaa.gov.ae serving a maintenance page)
- * when this was implemented, so the exact clause/numbers were NOT
- * independently re-verified against GCAA's own text the way every other
- * sub-check in this file was. Same footing as `src/ftl/operatorConfig.ts`'s
- * "confirmed no pairings cap" precedent — a real domain-expert
- * confirmation, not a re-verified document citation. Re-verify against the
- * primary source once reachable (see docs/gcaa-sources.md) and correct
- * this note (and the citation clause, if it turns out to differ) if the
- * real text says something else.
+ * NOTE: an earlier version of this file also implemented a "recurrent
+ * extended recovery rest" sub-check (>=36h including >=2 local nights, at
+ * least once every 168h) under this same clause, added on direct pilot
+ * confirmation while the primary GCAA source PDF was unreachable. Once the
+ * primary source came back online, independent re-verification found GCAA's
+ * actual ORO.FTL.205.G text does NOT contain that provision — it was
+ * EASA's ORO.FTL.235 (a differently-numbered clause GCAA does not mirror
+ * here; GCAA's own ORO.FTL.235.G is "Mixed duties", unrelated). Removed —
+ * see docs/roster-gen-assumptions.md item 28 for the correction and
+ * docs/gcaa-sources.md for the resolved citation history.
  */
 
 import type { CumulativeTotals, RuleEvaluation } from '../types';
@@ -39,13 +32,6 @@ const MIN_CONSECUTIVE_DAYS_OFF_IN_14 = 2;
 const MIN_DAYS_OFF_IN_28 = 7;
 const MIN_AVG_DAYS_OFF_PER_28D_OVER_3_PERIODS = 8;
 const DAY_OFF_MIN_HOURS = 34;
-
-/** Minimum length, in hours, of a qualifying "recurrent extended recovery rest" period. */
-export const EXTENDED_RECOVERY_REST_MIN_HOURS = 36;
-/** Minimum distinct local nights (`src/ftl/localNight.ts`) a qualifying period must include. */
-export const EXTENDED_RECOVERY_REST_MIN_LOCAL_NIGHTS = 2;
-/** Maximum hours permitted between the end of one qualifying period and the start of the next. */
-export const EXTENDED_RECOVERY_REST_MAX_GAP_HOURS = 168;
 
 /**
  * Returns true if a candidate "day off" period qualifies under
@@ -61,31 +47,6 @@ export function isValidDayOffPeriod(
     );
   }
   return periodHours >= DAY_OFF_MIN_HOURS && includesTwoLocalNights;
-}
-
-/**
- * Returns true if a rest period qualifies as a "recurrent extended
- * recovery rest": at least `EXTENDED_RECOVERY_REST_MIN_HOURS`, including at
- * least `EXTENDED_RECOVERY_REST_MIN_LOCAL_NIGHTS` local nights.
- */
-export function isQualifyingExtendedRecoveryRest(
-  restMinutes: number,
-  localNightsIncluded: number
-): boolean {
-  if (!Number.isFinite(restMinutes) || restMinutes < 0) {
-    throw new Error(
-      `isQualifyingExtendedRecoveryRest: restMinutes must be a non-negative finite number (got ${restMinutes})`
-    );
-  }
-  if (!Number.isInteger(localNightsIncluded) || localNightsIncluded < 0) {
-    throw new Error(
-      `isQualifyingExtendedRecoveryRest: localNightsIncluded must be a non-negative integer (got ${localNightsIncluded})`
-    );
-  }
-  return (
-    restMinutes >= EXTENDED_RECOVERY_REST_MIN_HOURS * 60 &&
-    localNightsIncluded >= EXTENDED_RECOVERY_REST_MIN_LOCAL_NIGHTS
-  );
 }
 
 /**
@@ -176,15 +137,6 @@ export function evaluateDaysOff(totals: CumulativeTotals): RuleEvaluation[] {
         ? 'GREEN'
         : 'RED',
     message: `Average of ${totals.avgDaysOffPer28dOver3Periods} days off per 28-day period over 3 periods (minimum ${MIN_AVG_DAYS_OFF_PER_28D_OVER_3_PERIODS} required).`,
-  });
-
-  evaluations.push({
-    citation: { ...DAYS_OFF_CITATION, ruleId: 'gcaa-days-off-extended-recovery-rest' },
-    severity:
-      totals.hoursSinceLastQualifyingExtendedRecoveryRest <= EXTENDED_RECOVERY_REST_MAX_GAP_HOURS
-        ? 'GREEN'
-        : 'RED',
-    message: `${totals.hoursSinceLastQualifyingExtendedRecoveryRest.toFixed(1)}h since the last qualifying recurrent extended recovery rest (>=${EXTENDED_RECOVERY_REST_MIN_HOURS}h including >=${EXTENDED_RECOVERY_REST_MIN_LOCAL_NIGHTS} local nights); maximum ${EXTENDED_RECOVERY_REST_MAX_GAP_HOURS}h between qualifying periods. NOT independently verified against the primary GCAA text yet — see this file's own module doc comment.`,
   });
 
   return evaluations;

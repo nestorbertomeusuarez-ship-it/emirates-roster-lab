@@ -1330,97 +1330,92 @@ describe('generateMonthlyRoster — destination mix (docs item 26)', () => {
   });
 });
 
-describe('generateMonthlyRoster — recurrent extended recovery rest (docs item 27)', () => {
-  // 7 short home-base round-trips, each separated by exactly a 30h rest gap
-  // (well above the 12h min-rest floor, but under the 36h extended-
-  // recovery-rest threshold) — no gap ever qualifies on its own, so by the
-  // 7th duty more than 168h have elapsed since the roster's own start
-  // (day 1's report) without a single qualifying rest.
-  function buildSpacedShortDuties(count: number): RosterGenDay[] {
-    const days: RosterGenDay[] = [];
-    let depUTC = new Date('2027-06-01T08:00:00.000Z');
-    for (let k = 0; k < count; k += 1) {
-      const arrUTC = new Date(depUTC.getTime() + 60 * 60_000); // 1h block
-      const date = depUTC.toISOString().slice(0, 10);
-      days.push(buildHandBuiltFlightDay(date, 'A350', 'DXB', depUTC, 'DXB', arrUTC, 60));
-      const dutyEndUTC = new Date(arrUTC.getTime() + 30 * 60_000); // +30min debrief
-      const nextReportUTC = new Date(dutyEndUTC.getTime() + 30 * 60 * 60_000); // 30h rest gap
-      depUTC = new Date(nextReportUTC.getTime() + 90 * 60_000); // next STD = report + 90min
-    }
-    return days;
-  }
+describe('generateMonthlyRoster — local night after extended duty (docs item 28, ORO.FTL.225.G(e))', () => {
+  const RULE_ID = 'gcaa-min-rest-local-night-after-extended-duty';
+  const EXTENDED_DUTY_BLOCK_MIN = 19 * 60; // 19h — exceeds the 18h trigger
 
-  it('flags RED once 168h have elapsed since the last qualifying (>=36h, >=2 local nights) rest', () => {
-    const days = buildSpacedShortDuties(7);
-    const evaluations = evaluateRosterDays(days, AIRPORT_TZS);
-
-    const onLastDay = evaluations.filter((e) => e.date === days[days.length - 1].date);
-    expect(
-      onLastDay.some(
-        (e) =>
-          e.evaluation.citation.ruleId === 'gcaa-days-off-extended-recovery-rest' &&
-          e.evaluation.severity === 'RED'
-      )
-    ).toBe(true);
-  });
-
-  it('is GREEN on every day when only enough duties for 168h have NOT yet elapsed', () => {
-    const days = buildSpacedShortDuties(5); // ~5*30h-ish span, under 168h
-    const evaluations = evaluateRosterDays(days, AIRPORT_TZS);
-
-    expect(
-      evaluations.some(
-        (e) =>
-          e.evaluation.citation.ruleId === 'gcaa-days-off-extended-recovery-rest' &&
-          e.evaluation.severity === 'RED'
-      )
-    ).toBe(false);
-  });
-
-  it('resets the clock once a genuinely qualifying rest (>=36h, >=2 local nights) occurs', () => {
-    const spaced = buildSpacedShortDuties(6); // not yet overdue
-    // Append one more duty separated by a real 48h gap (>=36h, spans 2 local
-    // nights at DXB, UTC+4) from the 6th duty's end — this SHOULD qualify
-    // and reset the clock, so a duty placed right after it stays GREEN even
-    // though the cumulative elapsed time since day 1 would otherwise exceed
-    // 168h.
-    const sixth = spaced[spaced.length - 1];
-    const sixthArrUTC =
-      sixth.assignment.type === 'FLIGHT' ? sixth.assignment.pairing.legs[0].instance.arrUTC : null;
-    if (!sixthArrUTC) throw new Error('test fixture assumption broken');
-    const dutyEndUTC = new Date(sixthArrUTC.getTime() + 30 * 60_000);
-    const qualifyingRestReportUTC = new Date(dutyEndUTC.getTime() + 48 * 60 * 60_000);
-    const seventhDepUTC = new Date(qualifyingRestReportUTC.getTime() + 90 * 60_000);
-    const seventhArrUTC = new Date(seventhDepUTC.getTime() + 60 * 60_000);
-    const seventh = buildHandBuiltFlightDay(
-      seventhDepUTC.toISOString().slice(0, 10),
+  it('flags RED when the rest after a >18h duty does not include a local night', () => {
+    // Duty 1: DXB local 19:00 -> +19h -> DXB local 14:00 the next day.
+    const depUTC = new Date('2027-06-01T15:00:00.000Z'); // local 19:00
+    const arrUTC = new Date(depUTC.getTime() + EXTENDED_DUTY_BLOCK_MIN * 60_000); // local 14:00 next day
+    const day1 = buildHandBuiltFlightDay(
+      depUTC.toISOString().slice(0, 10),
       'A350',
       'DXB',
-      seventhDepUTC,
+      depUTC,
       'DXB',
-      seventhArrUTC,
+      arrUTC,
+      EXTENDED_DUTY_BLOCK_MIN
+    );
+
+    // Only 13h of rest, entirely in the local daytime (14:30 -> 03:30 the
+    // next local morning never happens — this gap stays well clear of the
+    // 22:00-08:00 band).
+    const dutyEndUTC = new Date(arrUTC.getTime() + 30 * 60_000); // local 14:30
+    const nextReportUTC = new Date(dutyEndUTC.getTime() + 13 * 60 * 60_000); // local 03:30 next day — inside the band, but briefly
+    const nextDepUTC = new Date(nextReportUTC.getTime() + 90 * 60_000);
+    const nextArrUTC = new Date(nextDepUTC.getTime() + 60 * 60_000);
+    const day2 = buildHandBuiltFlightDay(
+      nextDepUTC.toISOString().slice(0, 10),
+      'A350',
+      'DXB',
+      nextDepUTC,
+      'DXB',
+      nextArrUTC,
       60
     );
 
-    const days = [...spaced, seventh];
-    const evaluations = evaluateRosterDays(days, AIRPORT_TZS);
-    const onSeventhDay = evaluations.filter((e) => e.date === seventh.date);
+    const evaluations = evaluateRosterDays([day1, day2], AIRPORT_TZS);
+    const onDay2 = evaluations.filter((e) => e.date === day2.date);
     expect(
-      onSeventhDay.some(
-        (e) =>
-          e.evaluation.citation.ruleId === 'gcaa-days-off-extended-recovery-rest' &&
-          e.evaluation.severity === 'RED'
-      )
+      onDay2.some((e) => e.evaluation.citation.ruleId === RULE_ID && e.evaluation.severity === 'RED')
+    ).toBe(true);
+  });
+
+  it('is GREEN when the rest after a >18h duty does include a local night', () => {
+    const depUTC = new Date('2027-06-01T15:00:00.000Z'); // local 19:00
+    const arrUTC = new Date(depUTC.getTime() + EXTENDED_DUTY_BLOCK_MIN * 60_000); // local 14:00 next day
+    const day1 = buildHandBuiltFlightDay(
+      depUTC.toISOString().slice(0, 10),
+      'A350',
+      'DXB',
+      depUTC,
+      'DXB',
+      arrUTC,
+      EXTENDED_DUTY_BLOCK_MIN
+    );
+
+    // 20h of rest (local 14:30 -> 10:30 the next day) fully spans the
+    // intervening 22:00-08:00 local band.
+    const dutyEndUTC = new Date(arrUTC.getTime() + 30 * 60_000);
+    const nextReportUTC = new Date(dutyEndUTC.getTime() + 20 * 60 * 60_000);
+    const nextDepUTC = new Date(nextReportUTC.getTime() + 90 * 60_000);
+    const nextArrUTC = new Date(nextDepUTC.getTime() + 60 * 60_000);
+    const day2 = buildHandBuiltFlightDay(
+      nextDepUTC.toISOString().slice(0, 10),
+      'A350',
+      'DXB',
+      nextDepUTC,
+      'DXB',
+      nextArrUTC,
+      60
+    );
+
+    const evaluations = evaluateRosterDays([day1, day2], AIRPORT_TZS);
+    const onDay2 = evaluations.filter((e) => e.date === day2.date);
+    expect(onDay2.some((e) => e.evaluation.citation.ruleId === RULE_ID)).toBe(true);
+    expect(
+      onDay2.some((e) => e.evaluation.citation.ruleId === RULE_ID && e.evaluation.severity === 'RED')
     ).toBe(false);
   });
 
-  it('generateMonthlyRoster construction never gets permanently stuck OFF chasing this check (regression guard for a real bug found while building this item)', () => {
-    // While implementing this item, an ordering bug (evaluating "hours
-    // overdue" using the OLD anchor even when the CURRENT day's own rest
-    // cures the overdue-ness) made every candidate look permanently RED
-    // once the roster went overdue once, so the construction loop simply
-    // stopped flying for the rest of the month. buildHaulMixPairings is
-    // exactly the fixture that surfaced it.
+  it('is not triggered at all when the preceding duty is <=18h', () => {
+    const days = buildConsecutiveHandBuiltFlightDays('2027-06-01', 3, 'A350');
+    const evaluations = evaluateRosterDays(days, AIRPORT_TZS);
+    expect(evaluations.some((e) => e.evaluation.citation.ruleId === RULE_ID)).toBe(false);
+  });
+
+  it('generateMonthlyRoster produces no RED for this rule against realistic (never >18h) duty durations', () => {
     const pairings = buildHaulMixPairings('A350');
     const result = generateMonthlyRoster({
       fleetType: 'A350',
@@ -1431,7 +1426,9 @@ describe('generateMonthlyRoster — recurrent extended recovery rest (docs item 
     });
 
     expect(result.summary.flightDays).toBeGreaterThan(0);
-    const reds = result.evaluations.filter((e) => e.evaluation.severity === 'RED');
+    const reds = result.evaluations.filter(
+      (e) => e.evaluation.citation.ruleId === RULE_ID && e.evaluation.severity === 'RED'
+    );
     expect(reds).toEqual([]);
   });
 });

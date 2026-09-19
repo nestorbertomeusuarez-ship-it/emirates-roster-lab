@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateMinRest } from './minRest';
+import { evaluateLocalNightAfterExtendedDuty, evaluateMinRest } from './minRest';
 
 describe('evaluateMinRest — flight crew, home base', () => {
   it('requires exactly 12h when preceding duty is shorter', () => {
@@ -148,6 +148,64 @@ describe('evaluateMinRest — cabin crew', () => {
       earnedRestMinutes: 659,
     });
     expect(result.severity).toBe('RED');
+  });
+});
+
+describe('evaluateLocalNightAfterExtendedDuty — ORO.FTL.225.G(e)', () => {
+  it('returns null when preceding duty is exactly 18h (trigger is a strict >18h)', () => {
+    expect(
+      evaluateLocalNightAfterExtendedDuty({
+        precedingDutyMinutes: 18 * 60,
+        role: 'FLIGHT_CREW',
+        awayFromBase: false,
+        earnedRestMinutes: 720,
+        restIncludesLocalNight: false,
+      })
+    ).toBeNull();
+  });
+
+  it('returns null for cabin crew regardless of duty length', () => {
+    expect(
+      evaluateLocalNightAfterExtendedDuty({
+        precedingDutyMinutes: 20 * 60,
+        role: 'CABIN_CREW',
+        awayFromBase: false,
+        earnedRestMinutes: 720,
+        restIncludesLocalNight: false,
+      })
+    ).toBeNull();
+  });
+
+  it('is AMBER when preceding duty exceeds 18h and restIncludesLocalNight is unknown', () => {
+    const result = evaluateLocalNightAfterExtendedDuty({
+      precedingDutyMinutes: 19 * 60,
+      role: 'FLIGHT_CREW',
+      awayFromBase: false,
+      earnedRestMinutes: 720,
+    });
+    expect(result?.severity).toBe('AMBER');
+  });
+
+  it('is RED when preceding duty exceeds 18h and the rest does not include a local night', () => {
+    const result = evaluateLocalNightAfterExtendedDuty({
+      precedingDutyMinutes: 19 * 60,
+      role: 'FLIGHT_CREW',
+      awayFromBase: false,
+      earnedRestMinutes: 720,
+      restIncludesLocalNight: false,
+    });
+    expect(result?.severity).toBe('RED');
+  });
+
+  it('is GREEN when preceding duty exceeds 18h and the rest includes a local night', () => {
+    const result = evaluateLocalNightAfterExtendedDuty({
+      precedingDutyMinutes: 19 * 60,
+      role: 'FLIGHT_CREW',
+      awayFromBase: false,
+      earnedRestMinutes: 720,
+      restIncludesLocalNight: true,
+    });
+    expect(result?.severity).toBe('GREEN');
   });
 });
 
