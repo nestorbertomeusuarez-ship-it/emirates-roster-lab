@@ -113,6 +113,100 @@ candidate pairings for the live Oct 2026 A350 schedule (59-61 candidates
 each). Real read-only `buildMonthlyRosterForFleet` check: 0 RED both
 fleets after the update.
 
+## 2026-09-19 real STD/STA times pass
+
+Direct user message: *"las horas STD deben ser reales, investigalas y
+aplicalas a todos los pairings"* — the previously-cosmetic departure times
+(`stdForRoute()`'s deterministic pseudo-hash, explicitly documented as
+having no bearing on pairing-engine correctness) should be replaced with
+real, researched STD/STA times across all pairings. Asked how to source
+this given Emirates.com is excluded (see "Sources explicitly excluded"
+below); the user chose **web search research** over other options.
+
+86 A350/A380 routes were researched in parallel (6 forks, to keep raw
+search output out of the main conversation) against real third-party
+schedule aggregators — never Emirates.com. Results came back at mixed
+confidence. Asked how to apply a mixed-quality result set, the user chose
+**"only high/medium-high confidence routes"** — the remainder stay on the
+existing synthetic `stdForRoute()` hash, honestly left as still-synthetic
+rather than applying a low-confidence real-looking number that could be
+wrong.
+
+### What changed
+
+`scripts/gen-seed-data.mjs` gained a `stdOutLocal`/`stdRetLocal` (local
+HH:MM at each station, resolved to UTC via each airport's real IANA
+timezone — see `localHHMMToUTCMinutes`/`utcOffsetMinutesAt` and the new
+`REPRESENTATIVE_DATE_FOR_DST = '2026-10-15'` constant, since this
+generator only ever seeds the one representative month) applied to **28
+of the 86 researched routes** (the high/medium-high-confidence subset):
+
+- **8 A350 routes**: KWI (01:25/03:40), EDI (14:50/20:55), OSL
+  (07:30/14:35), HEL (08:45/16:45), CMB (16:10/02:55), AMD (22:50/09:50),
+  ADL (02:00/22:35), TPE (03:45/23:50).
+- **20 A380 routes**: JFK (08:30/23:00), LAX (08:00/16:40), SFO
+  (08:25/17:00), IAH (09:30/19:35), IAD (01:40/10:55), YYZ (03:30/14:55),
+  SYD (02:00/20:45), MEL (03:00/21:15), PER (02:45/22:20), JNB
+  (04:05/13:40), CAI (20:55/00:50), KUL (03:40/02:00), PVG (02:50/00:05),
+  MRU (03:28/21:50), LHR (07:45/13:40), CPH (08:20/15:15), GLA
+  (07:50/14:20), FRA (15:20/15:15), NCE (08:40/15:40), ZRH (15:00/22:00).
+
+Every applied route's `sourceRef` note is tagged with the shared
+`REAL_STD_NOTE` constant, spelling out the exact sourcing/confidence bar
+and the DST caveat. The remaining ~58 researched routes are left
+unchanged on the synthetic hash — not a data-loss, a deliberate
+confidence-gated decision.
+
+### Structural findings surfaced, deliberately NOT auto-applied
+
+Three findings came back from the research pass that call the underlying
+route MODEL itself into question, not just its STD time — applying a real
+STD to a route whose basic shape might be wrong would have been worse
+than leaving it synthetic, so none of these were acted on:
+
+- **SVO (Moscow Sheremetyevo)** — a research fork flagged uncertainty over
+  whether SVO is still Emirates' actual Moscow gateway (vs. DME/VKO) as of
+  Sept 2026; the existing `airports-reference.json`/route entry was left
+  exactly as-is (see the pre-existing `note: 'Sheremetyevo — Emirates'
+  typical Moscow gateway'` in `gen-seed-data.mjs`), no STD applied.
+- **CHC (Christchurch)** — already documented in this generator's own
+  file-header judgment-call note as modeled as one representative direct
+  daily line for convenience, when in reality Emirates routes CHC via
+  SYD/AKL, not nonstop from DXB; the research pass reconfirmed this is
+  still the case, so it stays unchanged (no STD applied to a nonstop
+  service that doesn't actually exist).
+- **LCA/MLA (Larnaca/Malta)** — a research fork raised the possibility
+  these two brand-new-this-quarter routes might actually be one shared
+  tag-on rotation (DXB-LCA-MLA-DXB or similar) rather than two independent
+  nonstop pairs, given their geographic proximity and simultaneous launch.
+  Not confirmed either way, so both routes were left on their original
+  engineering-estimate block times with no real STD applied (see the
+  2026-09-19 A350 quarterly route update section above).
+
+### Live DB
+
+`npx tsx prisma/seed.ts`: 0 airports created (this pass adds no new
+destinations, only enriches existing ones — the 5 airports from the
+quarterly route update were already seeded), 51 flights created, 123
+updated. Because `Flight`'s natural key includes `stdUTCMin`
+(`prisma/schema.prisma`), giving an existing route a new real STD created
+a NEW row rather than updating in place, leaving the 5 routes that
+already had a live-referenced old row (DXB-CPH, CPH-DXB, KUL-DXB,
+DXB-PVG, MRU-DXB) with an orphaned duplicate. Verified each stale row had
+**zero** `RosterEntry` references (only referenced by already-orphaned
+`Pairing` rows from earlier candidate-generation runs) before deleting:
+4 orphaned `Pairing` rows (cascading their `PairingLeg`s), then 155
+now-unreferenced `FlightInstance` rows, then the 5 stale `Flight` rows
+themselves. Final `Flight` count: 174, matching
+`dxb-seed-schedule.json` exactly. Confirmed the real Oct 2026
+`RosterEntry` rows (17 total; only 3 are `FLIGHT` days this early in the
+month, the rest `OFF` with a null `pairingId` by schema design) still
+resolve correctly, and a real read-only `buildMonthlyRosterForFleet`
+check shows 0 RED for both fleets. Full suite 342/342 passing after this
+pass (see the separate `fix(ftl)` commit for why the count differs from
+the 344 recorded in the previous section — an unrelated FTL rule
+correction landed between these two passes).
+
 ## Sources in use
 
 1. **Manual CSV/JSON import** — primary, always-available, zero
