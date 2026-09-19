@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_DEBRIEF_MINUTES,
   DEFAULT_REPORT_OFFSET_MINUTES,
+  computeDutyEndForRest,
   computeDutyMinutes,
   computeReportTime,
   formatLocalHHMM,
@@ -85,11 +87,36 @@ describe('layoverMinutes', () => {
   });
 });
 
+describe('computeDutyEndForRest', () => {
+  it('defaults to on-blocks plus 30 minutes debrief', () => {
+    const lastOnBlocks = new Date('2026-02-02T20:45:00.000Z');
+    expect(DEFAULT_DEBRIEF_MINUTES).toBe(30);
+    expect(computeDutyEndForRest(lastOnBlocks).toISOString()).toBe('2026-02-02T21:15:00.000Z');
+  });
+
+  it('accepts a custom debrief offset', () => {
+    const lastOnBlocks = new Date('2026-02-02T20:45:00.000Z');
+    expect(computeDutyEndForRest(lastOnBlocks, 0).toISOString()).toBe('2026-02-02T20:45:00.000Z');
+  });
+
+  it('throws for a negative debrief offset', () => {
+    const lastOnBlocks = new Date('2026-02-02T20:45:00.000Z');
+    expect(() => computeDutyEndForRest(lastOnBlocks, -5)).toThrow();
+  });
+});
+
 describe('restMinutes', () => {
-  it('computes rest between last on-blocks and the next report time', () => {
+  it('computes rest between on-blocks PLUS debrief time and the next report time', () => {
     const lastOnBlocks = new Date('2026-02-02T20:45:00.000Z');
     const nextReport = new Date('2026-02-04T06:00:00.000Z');
-    expect(restMinutes(lastOnBlocks, nextReport)).toBe(1995);
+    // Raw gap is 1995 min; the default 30min debrief reduces earned rest to 1965.
+    expect(restMinutes(lastOnBlocks, nextReport)).toBe(1965);
+  });
+
+  it('accepts a custom debrief offset', () => {
+    const lastOnBlocks = new Date('2026-02-02T20:45:00.000Z');
+    const nextReport = new Date('2026-02-04T06:00:00.000Z');
+    expect(restMinutes(lastOnBlocks, nextReport, 0)).toBe(1995);
   });
 
   it('throws for negative rest', () => {

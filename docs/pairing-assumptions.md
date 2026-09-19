@@ -107,3 +107,44 @@ assignment and N rows that must always agree about which pairing/day-index
 they represent). `src/pairing/db/roster.ts#buildRosterGrid` derives which
 calendar cells are "occupied by pairing X, day N" purely by reading that
 one row — no extra database rows are created for continuation days.
+
+## 9. Post-flight debrief time: 30 minutes added to on-blocks before rest starts
+
+Direct user feedback (an actual line pilot's correction): a crew member
+isn't released from duty the instant the aircraft comes to rest — there's
+a real post-flight wind-down/debrief period before the duty is truly
+complete for REST-PERIOD purposes. `src/pairing/dutyTimes.ts`'s
+`DEFAULT_DEBRIEF_MINUTES = 30` and `computeDutyEndForRest(lastOnBlocksUTC,
+debriefMinutes)` model this: it's `on-blocks + 30min`, not raw on-blocks,
+that gets checked against the FOLLOWING duty's report time for minimum
+rest (ORO.FTL.225.G/265.G(b)). Same footing as item 1's report-time
+offset: a common industry default, **not** sourced from an actual Emirates
+OM-A extract or published debrief-time policy.
+
+**Deliberately scoped to REST only** — the FDP/duty-period LENGTH itself
+(`computeDutyMinutes`, item 5's own engineering-approximation) still ends
+at raw on-blocks, unaffected. Debrief only ever pushes the *next* duty's
+minimum-rest floor requirement later; it never changes how long the
+flying duty itself is measured as.
+
+Wired into `restMinutes` (now takes an optional `debriefMinutes` param,
+defaulting to `DEFAULT_DEBRIEF_MINUTES`) and, more importantly, into
+`src/roster-gen/generateMonthlyRoster.ts`'s `prevDutyEnd.utc` — both sites
+that record "when did the previous duty truly end" (the main construction/
+verification loop, and `findPriorMonthDutyEnd` for docs item 24's
+cross-month carry-over) now store `computeDutyEndForRest(lastOnBlocksUTC)`
+instead of the raw on-blocks instant, so every downstream rest check
+(construction-time candidate screening, the final verification pass, and
+cross-month carry-over alike) picks this up automatically — no new
+`GenerateMonthlyRosterInput` field needed.
+
+Verified: `dutyTimes.test.ts` covers `computeDutyEndForRest` and the
+updated `restMinutes` directly; `generateMonthlyRoster.test.ts` gained a
+dedicated case proving a gap that's exactly legal on RAW arrival-to-report
+timing (12h00m at the flight-crew home-base floor) becomes a real RED once
+debrief is added (effective rest 11h30m) — a violation invisible without
+this item. Real read-only `buildMonthlyRosterForFleet` check against the
+live Oct 2026 schedule: still 0 RED both fleets, block hours essentially
+unchanged (the construction loop transparently substituted a few
+candidates that were only marginal under the old, less realistic rest
+definition).

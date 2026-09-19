@@ -23,6 +23,42 @@
  */
 export const DEFAULT_REPORT_OFFSET_MINUTES = 90;
 
+/**
+ * ASSUMPTION, not confirmed data (mirrors `DEFAULT_REPORT_OFFSET_MINUTES`'s
+ * own precedent — see docs/pairing-assumptions.md): default post-flight
+ * debrief/admin time after on-blocks, before a duty is truly complete for
+ * REST-PERIOD purposes. Direct user feedback: the crew isn't released from
+ * duty the instant the aircraft comes to rest — there's a wind-down period
+ * before the rest clock can be considered to start, and it's THAT instant
+ * (on-blocks + debrief), not raw on-blocks, that must be checked against
+ * the next duty's report time for minimum rest. NOT sourced from an actual
+ * Emirates OM-A extract or published policy — a common industry default,
+ * same footing as the report-time offset. Deliberately does NOT affect the
+ * FDP/duty-period LENGTH itself (`computeDutyMinutes` below still ends at
+ * raw on-blocks, per this module's own existing "ENGINEERING-APPROXIMATION
+ * NOTE") — debrief only ever pushes the REST period's start later, never
+ * changes how long the flying duty itself was measured as.
+ */
+export const DEFAULT_DEBRIEF_MINUTES = 30;
+
+/**
+ * The instant a duty is truly complete for REST-PERIOD purposes: on-blocks
+ * plus debrief time (see `DEFAULT_DEBRIEF_MINUTES`'s doc comment). This is
+ * NOT the same instant as the duty/FDP's own end (which stays at raw
+ * on-blocks) — it exists only to measure rest against the following duty.
+ */
+export function computeDutyEndForRest(
+  lastOnBlocksUTC: Date,
+  debriefMinutes: number = DEFAULT_DEBRIEF_MINUTES
+): Date {
+  if (debriefMinutes < 0) {
+    throw new Error(
+      `computeDutyEndForRest: debriefMinutes must be >= 0 (got ${debriefMinutes})`
+    );
+  }
+  return new Date(lastOnBlocksUTC.getTime() + debriefMinutes * 60_000);
+}
+
 export interface ReportTimeResult {
   reportUTC: Date;
   reportOffsetMinutesUsed: number;
@@ -119,12 +155,21 @@ export function layoverMinutes(prevArrUTC: Date, nextDepUTC: Date): number {
   return minutes;
 }
 
-/** Rest between two separate duties: last on-blocks of one duty to the next duty's report time. */
-export function restMinutes(lastOnBlocksUTC: Date, nextReportUTC: Date): number {
-  const minutes = Math.round((nextReportUTC.getTime() - lastOnBlocksUTC.getTime()) / 60_000);
+/**
+ * Rest between two separate duties: the PRIOR duty's true end for rest
+ * purposes (on-blocks plus debrief time — see `computeDutyEndForRest`) to
+ * the next duty's report time.
+ */
+export function restMinutes(
+  lastOnBlocksUTC: Date,
+  nextReportUTC: Date,
+  debriefMinutes: number = DEFAULT_DEBRIEF_MINUTES
+): number {
+  const dutyEndForRestUTC = computeDutyEndForRest(lastOnBlocksUTC, debriefMinutes);
+  const minutes = Math.round((nextReportUTC.getTime() - dutyEndForRestUTC.getTime()) / 60_000);
   if (minutes < 0) {
     throw new Error(
-      `restMinutes: nextReportUTC must not be before lastOnBlocksUTC (got ${minutes} min)`
+      `restMinutes: nextReportUTC must not be before lastOnBlocksUTC + debriefMinutes (got ${minutes} min)`
     );
   }
   return minutes;

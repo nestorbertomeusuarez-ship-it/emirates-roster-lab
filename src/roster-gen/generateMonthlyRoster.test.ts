@@ -1055,6 +1055,32 @@ describe('generateMonthlyRoster — cross-month rest + consecutive-duty-day carr
     ).toBe(false);
   });
 
+  it('debrief time (docs/pairing-assumptions.md item 9) counts against rest even when the RAW arrival-to-report gap alone would be exactly legal', () => {
+    // Report at 09:30 UTC June 1 is EXACTLY 12h00m after the prior duty's raw
+    // 21:30 UTC arrival — legal with zero debrief. With the default 30min
+    // debrief added on top of that arrival, the true rest floor only starts
+    // at 22:00 UTC, leaving just 11h30m of earned rest — a real violation
+    // only visible because debrief time is modeled.
+    const days: RosterGenDay[] = [
+      buildHandBuiltFlightDay(
+        '2027-06-01',
+        'A350',
+        'DXB',
+        new Date('2027-06-01T11:00:00.000Z'), // report 09:30 UTC — exactly 12h00m after raw arrival
+        'BOM',
+        new Date('2027-06-01T14:00:00.000Z'),
+        180
+      ),
+    ];
+
+    const evaluations = evaluateRosterDays(days, AIRPORT_TZS, undefined, PRIOR_MONTH_LAST_DUTY);
+    expect(
+      evaluations.some(
+        (e) => e.evaluation.citation.ruleId === 'gcaa-min-rest-flight-crew' && e.evaluation.severity === 'RED'
+      )
+    ).toBe(true);
+  });
+
   it('generateMonthlyRoster itself avoids the now-illegal day-1 accept (construction loop, not just the verification pass)', () => {
     // buildSingleRoutePairings departs DXB at 10:00 UTC every day -> day-1
     // report is 08:30 UTC, only 11h after PRIOR_MONTH_LAST_DUTY's 21:30 UTC

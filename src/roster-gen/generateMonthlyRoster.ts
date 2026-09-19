@@ -226,6 +226,9 @@
  *   - seed `evaluateRosterDays`'s `prevDutyEnd` from the last real FLIGHT
  *     day found in it (`findPriorMonthDutyEnd`), so day 1's minimum-rest
  *     check has real history instead of starting from nothing.
+ *     `prevDutyEnd.utc` (both here and in the main loop's own tail) is
+ *     `computeDutyEndForRest(lastOnBlocksUTC)` — on-blocks PLUS post-flight
+ *     debrief time, not raw on-blocks (docs/pairing-assumptions.md item 9).
  *   - continue a consecutive-duty-day run into the new month
  *     (`countConsecutiveDutyDaysAtEndWithCarryOver`), so a run that ends
  *     the prior month still flying correctly counts toward both the
@@ -286,7 +289,7 @@
  */
 
 import type { GeneratedPairing, PairingLegResult } from '../pairing/types';
-import { computeDutyMinutes, computeReportTime } from '../pairing/dutyTimes';
+import { computeDutyEndForRest, computeDutyMinutes, computeReportTime } from '../pairing/dutyTimes';
 import { toFlightDutyPeriod } from '../pairing/toFlightDutyPeriod';
 import { evaluateDuty } from '../ftl/evaluate';
 import type {
@@ -555,7 +558,7 @@ function findPriorMonthDutyEnd(
     const built = computeFlightDayFdp(priorMonthTailDays[i], airportTimeZones);
     if (!built) continue;
     return {
-      utc: built.lastOnBlocksUTC,
+      utc: computeDutyEndForRest(built.lastOnBlocksUTC),
       minutes: built.fdp.actualOrPlannedFdpMinutes ?? dailyDutyMinutes[i],
       station: built.arrIata,
     };
@@ -664,7 +667,7 @@ export function evaluateRosterDays(
     }
 
     prevDutyEnd = {
-      utc: lastOnBlocksUTC,
+      utc: computeDutyEndForRest(lastOnBlocksUTC),
       minutes: fdp.actualOrPlannedFdpMinutes ?? dailyDutyMinutes[i],
       station: arrIata,
     };
