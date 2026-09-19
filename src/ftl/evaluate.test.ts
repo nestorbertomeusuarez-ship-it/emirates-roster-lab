@@ -95,6 +95,7 @@ describe('evaluateDuty', () => {
       daysOffLast14: 2,
       daysOffLast28: 7,
       avgDaysOffPer28dOver3Periods: 8,
+      hoursSinceLastQualifyingExtendedRecoveryRest: 0,
     };
     const withCumulative = evaluateDuty(acclimatisedFdp, null, cumulative);
     expect(withCumulative.some((e) => e.citation.clause === 'ORO.FTL.200.G')).toBe(true);

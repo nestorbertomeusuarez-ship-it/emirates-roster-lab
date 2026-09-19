@@ -124,6 +124,14 @@ export interface CumulativeTotals {
   daysOffLast14: number;
   daysOffLast28: number;
   avgDaysOffPer28dOver3Periods: number;
+  /**
+   * Hours elapsed since the end of the most recent "recurrent extended
+   * recovery rest" period (see `src/ftl/rules/daysOff.ts`'s
+   * `EXTENDED_RECOVERY_REST_*` constants) — or, if none has occurred yet
+   * within the caller's own tracked history, hours since that history's
+   * own start (never fabricated as an immediate violation on day 1).
+   */
+  hoursSinceLastQualifyingExtendedRecoveryRest: number;
 }
 
 /**

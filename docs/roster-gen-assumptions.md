@@ -1351,3 +1351,96 @@ construction-loop refinement to the existing `MIX` strategy. Nothing
 downstream (`src/roster-gen/db/rosterGen.ts`, `actions.ts`, the generation
 form) needed any change — every `MIX` generation gets destination mix
 automatically.
+
+## 27. Recurrent extended recovery rest: >=36h including >=2 local nights, at least once every 168h
+
+Follow-up to a debrief-time correction (item 9, docs/pairing-assumptions.md):
+the user, verifying the debrief-adjusted rest math, recalled a "local
+nights" requirement and asked for it to be checked against the primary
+source. The GCAA primary PDF was unreachable at the time (maintenance
+page, not the real document — see docs/gcaa-sources.md's own pending
+re-verification note). Comparative research against EASA's and UK CAA's
+published FTL text (both, same underlying regulation family as GCAA's
+CAR-AIR OPS) found a real, specific provision: a "recurrent extended
+recovery rest" of >=36h including >=2 local nights must occur at least
+once every 168h (7 days) — structurally separate from the ordinary
+between-duty minimum-rest rule (`minRest.ts`), and from the simple
+day-count checks already in `daysOff.ts` (2-in-14, 7-in-28, avg-8-per-28).
+**Confirmed by direct pilot confirmation that GCAA's own rule is
+structurally identical** — implemented on that basis, not an independently
+re-verified GCAA citation (see docs/gcaa-sources.md's pending
+re-verification note; upgrade once the primary source is reachable again).
+
+### What changed
+
+New `src/ftl/localNight.ts` (pure, zero-dependency, mirrors
+`src/pairing/dutyTimes.ts`'s own `Intl`-based local-time approach):
+`countLocalNightsWithinWindow(windowStartUTC, windowEndUTC, ianaTimeZone)`
+counts DISTINCT local nights (22:00-06:00 local — confirmed by direct
+pilot confirmation, since this specific clock window isn't in any
+independently-verified source either) FULLY contained in a UTC window.
+Uses a fixed UTC-offset assumption (correct for Asia/Dubai, which never
+observes daylight saving, and every OFF/rest period this generator ever
+produces is either at DXB or at the station the crew is actually resting
+at — a DST transition mid-window elsewhere is a documented limitation, not
+silently mishandled).
+
+New `src/ftl/rules/daysOff.ts` additions: `EXTENDED_RECOVERY_REST_MIN_HOURS
+= 36`, `EXTENDED_RECOVERY_REST_MIN_LOCAL_NIGHTS = 2`,
+`EXTENDED_RECOVERY_REST_MAX_GAP_HOURS = 168`,
+`isQualifyingExtendedRecoveryRest(restMinutes, localNightsIncluded)`, and a
+new `evaluateDaysOff` sub-check (`gcaa-days-off-extended-recovery-rest`)
+reading a new `CumulativeTotals.hoursSinceLastQualifyingExtendedRecoveryRest`
+field.
+
+`generateMonthlyRoster.ts`'s `evaluateRosterDays` tracks
+`recoveryRestAnchorUTC` — the UTC instant the most recently-CONCLUDED
+qualifying rest ended. Bootstraps to the first FLIGHT day's own report
+time (day 1 always reads 0 hours elapsed — same "don't fabricate a
+violation from before this roster's own history" philosophy as the
+existing `availableHistory14`/`availableHistory28` window suppression).
+Deliberately NOT extended across the month boundary by `priorMonthTailDays`
+(item 24) beyond whatever the existing single-duty rest carry-over already
+provides for free — consistent with item 24's own "Deliberately NOT done"
+scope boundary for trailing-window checks.
+
+### A real bug, caught before it shipped
+
+Getting the evaluation ORDER right mattered: the first implementation
+computed `hoursSinceLastQualifyingExtendedRecoveryRest` using the anchor's
+OLD value, THEN checked whether today's own preceding rest qualified (to
+update the anchor for FUTURE days only). This meant a day whose OWN
+preceding rest was long enough to qualify still got evaluated as "overdue"
+based on the stale anchor — flagging every recovery day RED regardless of
+how long the rest actually was. Once the roster went overdue once, every
+subsequent candidate looked equally hopeless during construction-time
+screening, and the generator simply stopped flying for the rest of the
+month (`buildHaulMixPairings`'s SHORT-haul route count silently dropped to
+0 — the regression that surfaced this while running the full test suite).
+Fixed by resolving whether TODAY's own rest qualifies BEFORE computing
+today's own elapsed-hours figure, so a qualifying rest resets the clock
+as of the SAME day it concludes on, not only for days after it.
+
+### Verification
+
+New `src/ftl/localNight.test.ts` (7 tests: the confirmed window, exact
+2-night coverage, partial-night non-counting, extra-time non-inflation,
+a too-short rest, an empty/inverted window, a second fixed-offset
+timezone). New `daysOff.test.ts` cases for the sub-check's GREEN/RED
+boundary at exactly 168h and `isQualifyingExtendedRecoveryRest`'s own
+boundaries. New `generateMonthlyRoster.test.ts` describe block: a
+hand-built sequence of 30h-spaced short duties (never individually
+qualifying) surfaces RED once >168h has elapsed with no qualifying rest,
+stays GREEN under that threshold, and a genuine 48h/2-local-night gap
+resets the clock; plus the regression-guard test that caught the ordering
+bug, now passing. Full suite: 344/344 passing. Real read-only
+`buildMonthlyRosterForFleet` check against the live Oct 2026 schedule: see
+this item's commit message for the exact before/after numbers.
+
+### Wiring
+
+New `CumulativeTotals.hoursSinceLastQualifyingExtendedRecoveryRest`
+field (required — every existing direct constructor of a `CumulativeTotals`
+literal needed updating, all in test fixtures). No new
+`GenerateMonthlyRosterInput` field — purely internal to
+`evaluateRosterDays`'s existing rest-tracking machinery.

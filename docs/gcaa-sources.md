@@ -51,6 +51,26 @@ Every `RuleEvaluation` returned by this engine carries a `citation` field
 consulted above — built via `gcaaCitation()` in `src/ftl/citation.ts` so
 the document/URL/date triple is defined in exactly one place.
 
+### PENDING RE-VERIFICATION — recurrent extended recovery rest
+
+`gcaa-days-off-extended-recovery-rest` (`src/ftl/rules/daysOff.ts`,
+`EXTENDED_RECOVERY_REST_*` constants: >=36h including >=2 local nights,
+at least once every 168h) is cited under the same ORO.FTL.205.G clause as
+row 9 above, but — unlike every other row in this table — it was added on
+**direct pilot confirmation only**, not independent re-verification
+against the primary GCAA PDF: the primary source (URL above) was
+unreachable, serving a small maintenance-page response instead of the
+real document, as of 2026-09-19 (confirmed via both WebFetch and `curl
+-I`, ~33KB response vs. the real document's expected multi-MB size). The
+user (an actual Emirates line pilot) confirmed GCAA's rule is structurally
+identical to EASA's own ORO.FTL.235 "recurrent extended recovery rest"
+provision (36h/2 local nights/168h — verified against EASA/UK CAA's own
+published text, see `src/ftl/localNight.ts`'s and `daysOff.ts`'s own doc
+comments for that research). **Re-verify against the primary GCAA source
+once reachable** and update this note (and the clause/numbers, if GCAA's
+own text differs from EASA's) — do not remove this note until that
+re-verification has actually happened.
+
 ## OPERATOR_SPECIFIC — explicitly NOT publicly available
 
 `src/ftl/rules/operatorSpecific.ts` implements three placeholder checks

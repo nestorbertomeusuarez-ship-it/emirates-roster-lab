@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateDaysOff, isValidDayOffPeriod } from './daysOff';
+import {
+  EXTENDED_RECOVERY_REST_MAX_GAP_HOURS,
+  evaluateDaysOff,
+  isQualifyingExtendedRecoveryRest,
+  isValidDayOffPeriod,
+} from './daysOff';
 import type { CumulativeTotals } from '../types';
 
 const baseTotals: CumulativeTotals = {
@@ -12,6 +17,7 @@ const baseTotals: CumulativeTotals = {
   daysOffLast14: 2,
   daysOffLast28: 7,
   avgDaysOffPer28dOver3Periods: 8,
+  hoursSinceLastQualifyingExtendedRecoveryRest: 0,
 };
 
 function find(totals: CumulativeTotals, ruleId: string) {
@@ -111,6 +117,62 @@ describe('evaluateDaysOff — other sub-checks', () => {
         'gcaa-days-off-avg-8-per-28-over-3'
       ).severity
     ).toBe('RED');
+  });
+});
+
+describe('evaluateDaysOff — recurrent extended recovery rest', () => {
+  it('passes at exactly the 168h ceiling and fails 0.1h over', () => {
+    expect(
+      find(
+        { ...baseTotals, hoursSinceLastQualifyingExtendedRecoveryRest: EXTENDED_RECOVERY_REST_MAX_GAP_HOURS },
+        'gcaa-days-off-extended-recovery-rest'
+      ).severity
+    ).toBe('GREEN');
+    expect(
+      find(
+        {
+          ...baseTotals,
+          hoursSinceLastQualifyingExtendedRecoveryRest: EXTENDED_RECOVERY_REST_MAX_GAP_HOURS + 0.1,
+        },
+        'gcaa-days-off-extended-recovery-rest'
+      ).severity
+    ).toBe('RED');
+  });
+
+  it('is GREEN at 0 hours (roster-start bootstrap, no fabricated violation)', () => {
+    expect(
+      find(
+        { ...baseTotals, hoursSinceLastQualifyingExtendedRecoveryRest: 0 },
+        'gcaa-days-off-extended-recovery-rest'
+      ).severity
+    ).toBe('GREEN');
+  });
+});
+
+describe('isQualifyingExtendedRecoveryRest', () => {
+  it('qualifies at exactly 36h with exactly 2 local nights', () => {
+    expect(isQualifyingExtendedRecoveryRest(36 * 60, 2)).toBe(true);
+  });
+
+  it('does not qualify just under 36h even with 2+ local nights', () => {
+    expect(isQualifyingExtendedRecoveryRest(36 * 60 - 1, 2)).toBe(false);
+  });
+
+  it('does not qualify at 36h+ with fewer than 2 local nights', () => {
+    expect(isQualifyingExtendedRecoveryRest(40 * 60, 1)).toBe(false);
+  });
+
+  it('qualifies with MORE than 2 local nights too', () => {
+    expect(isQualifyingExtendedRecoveryRest(60 * 60, 3)).toBe(true);
+  });
+
+  it('throws for negative rest minutes', () => {
+    expect(() => isQualifyingExtendedRecoveryRest(-1, 2)).toThrow();
+  });
+
+  it('throws for a non-integer or negative local-nights count', () => {
+    expect(() => isQualifyingExtendedRecoveryRest(60 * 60, -1)).toThrow();
+    expect(() => isQualifyingExtendedRecoveryRest(60 * 60, 1.5)).toThrow();
   });
 });
 

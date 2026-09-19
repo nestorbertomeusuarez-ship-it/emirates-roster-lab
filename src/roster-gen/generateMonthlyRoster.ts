@@ -286,12 +286,35 @@
  * treats them as genuinely co-equal, never one merely breaking ties in the
  * other. Scoped to `MIX` only — `MAX_FLYING`/`MAX_DAYS_OFF` are explicitly
  * about candidate SIZE, not diversity, unaffected by this item.
+ *
+ * RECURRENT EXTENDED RECOVERY REST (docs/roster-gen-assumptions.md item
+ * 27, gcaa-days-off-extended-recovery-rest, `src/ftl/rules/daysOff.ts`):
+ * at least one rest period of >=36h including >=2 local nights
+ * (`src/ftl/localNight.ts`, window confirmed 22:00-06:00 local by direct
+ * pilot confirmation — see that file's own SOURCE NOTE) must occur at
+ * least once every 168h. `recoveryRestAnchorUTC` tracks the UTC instant
+ * the most recently-CONCLUDED qualifying rest ended (i.e. when duty
+ * resumed after it) — `null` until the first FLIGHT day, which bootstraps
+ * it to that day's own report time (day 1 always reads 0 hours elapsed,
+ * same "don't fabricate a violation from before this roster's own
+ * history" philosophy as `availableHistory14`/`availableHistory28`
+ * above). Whether TODAY's own preceding rest gap itself qualifies is
+ * resolved BEFORE computing today's `hoursSinceLastQualifyingExtendedRecoveryRest`
+ * — getting this order backwards was a real bug caught while building
+ * this item: evaluating "hours overdue" against the OLD anchor even when
+ * today's own rest cures the overdue-ness flagged every recovery day as
+ * RED regardless of how long the preceding rest actually was, which made
+ * every subsequent candidate look equally hopeless and the construction
+ * loop simply stopped flying for the rest of the month (see
+ * `generateMonthlyRoster.test.ts`'s dedicated regression-guard test).
  */
 
 import type { GeneratedPairing, PairingLegResult } from '../pairing/types';
 import { computeDutyEndForRest, computeDutyMinutes, computeReportTime } from '../pairing/dutyTimes';
 import { toFlightDutyPeriod } from '../pairing/toFlightDutyPeriod';
 import { evaluateDuty } from '../ftl/evaluate';
+import { isQualifyingExtendedRecoveryRest } from '../ftl/rules/daysOff';
+import { countLocalNightsWithinWindow } from '../ftl/localNight';
 import type {
   CumulativeTotals,
   FlightDutyPeriod,
@@ -612,6 +635,16 @@ export function evaluateRosterDays(
     priorMonthTailDays,
     airportTimeZones
   );
+  // Recurrent extended recovery rest tracking (docs item 27,
+  // gcaa-days-off-extended-recovery-rest) — the UTC instant the most
+  // recently-CONCLUDED qualifying (>=36h, >=2 local nights) rest period
+  // ended, i.e. when duty resumed after it. `null` until the very first
+  // FLIGHT day is reached, at which point it bootstraps to THAT day's own
+  // report time (day 1 always reads 0 hours elapsed — no fabricated
+  // violation from before this roster's own history, same philosophy as
+  // the `availableHistory14`/`availableHistory28` window-suppression
+  // below).
+  let recoveryRestAnchorUTC: Date | null = null;
 
   for (let i = 0; i < days.length; i += 1) {
     const day = days[i];
@@ -640,6 +673,32 @@ export function evaluateRosterDays(
       priorMonthTailDays
     );
 
+    // Did the rest gap that just PRECEDED this day's duty itself qualify as
+    // a recurrent extended recovery rest? Resolved BEFORE computing this
+    // day's own `hoursSinceLastQualifyingExtendedRecoveryRest` — if it
+    // qualifies, the clock resets as of THIS day's report time, not only
+    // for future days. Getting this order backwards was a real bug caught
+    // while regression-testing this item: evaluating "hours overdue" using
+    // the OLD anchor even when today's own rest cures the overdue-ness
+    // flagged every recovery day as RED regardless of how long the
+    // preceding rest actually was, which then made every subsequent
+    // candidate look equally hopeless and the construction loop simply
+    // stopped flying for the rest of the month.
+    if (recoveryRestAnchorUTC === null) {
+      recoveryRestAnchorUTC = reportUTC; // roster-start bootstrap — this day reads 0 hours elapsed
+    } else if (rest && prevDutyEnd) {
+      const localNights = countLocalNightsWithinWindow(
+        prevDutyEnd.utc,
+        reportUTC,
+        airportTimeZones[prevDutyEnd.station] ?? 'UTC'
+      );
+      if (isQualifyingExtendedRecoveryRest(rest.earnedRestMinutes, localNights)) {
+        recoveryRestAnchorUTC = reportUTC;
+      }
+    }
+    const hoursSinceLastQualifyingExtendedRecoveryRest =
+      (reportUTC.getTime() - recoveryRestAnchorUTC.getTime()) / 3_600_000;
+
     const cumulative: CumulativeTotals = {
       blockMinutes28d: trailingSum(dailyBlockMinutes, i, 28),
       // See module doc comment: month-to-date total stands in for a true
@@ -652,6 +711,7 @@ export function evaluateRosterDays(
       daysOffLast14: trailingCount(isOff, i, 14),
       daysOffLast28: trailingCount(isOff, i, 28),
       avgDaysOffPer28dOver3Periods: trailingCount(isOff, i, 28),
+      hoursSinceLastQualifyingExtendedRecoveryRest,
     };
 
     const dutyEvaluations = evaluateDuty(fdp, rest, cumulative, operatorConfig).filter((evaluation) => {
