@@ -69,6 +69,50 @@ October 2026 seeded month grew from the 23-route baseline to 3,142
 candidates with the automatic monthly generator still producing 0 RED
 evaluations for both fleets.
 
+## 2026-09-19 A350 quarterly route update
+
+Direct user message: *"New A350 route assignments this quarter include
+Kuala Lumpur, Helsinki, Larnaca, Malta, Nairobi, Hamburg, and Mauritius."*
+
+`scripts/gen-seed-data.mjs` updated:
+
+- **5 genuinely new A350 destinations** added as new `Flight` rows,
+  `confidence: ADVERTISED` (block times are ENGINEERING ESTIMATES derived
+  from great-circle distance, not sourced published schedule times — same
+  footing as this file's many pre-existing "reasonable estimate" A350
+  rows, e.g. RUH/DEL/ISB/CGK), `source: SEED`, `sourceRef` tagged with the
+  new `CONFIRM_2026_09_19` shorthand: **HEL** (Helsinki, ~400min estimate),
+  **LCA** (Larnaca, ~210min), **MLA** (Malta, ~310min), **NBO** (Nairobi,
+  ~285min), **HAM** (Hamburg, ~380min).
+- **MRU (Mauritius)** added as a new A350 row — already existed as a
+  CONFIRMED A380 route from the 2026-09-15 pass; the new A350 row reuses
+  that same 325min block time for consistency (a real multi-type route,
+  same pattern as KUL/BOM/TPE), `confidence: CONFIRMED`.
+- **KUL (Kuala Lumpur)** — already an existing A350 route (multi-type with
+  A380, `ADVERTISED`) — reconfirmed and upgraded to `CONFIRMED` per this
+  message, note updated (original ADVERTISED note preserved, not deleted).
+- The A350 loop's `sourceRef` generation gained a `route.sourceBase ??`
+  override (mirroring the A380 loop's pre-existing `CONFIRM_2026_09_15`
+  mechanism) so per-route dated confirmations no longer have to share one
+  fixed baseRef string.
+- 5 new airports added to `src/ingest/data/airports-reference.json`: HEL
+  (EFHK, Europe/Helsinki), LCA (LCLK, Asia/Nicosia), MLA (LMML,
+  Europe/Malta), NBO (HKJK, Africa/Nairobi), HAM (EDDH, Europe/Berlin) —
+  real public IATA/ICAO/coordinate/timezone facts, not flight-schedule
+  data, so not held to the same sourcing bar as block times.
+- `src/lib/airportCityNames.ts` updated with the 5 new city labels
+  (KUL/MRU were already present).
+
+After this pass: 37 A350 routes (up from 31), 174 flight records total, 78
+airports. `npx tsx prisma/seed.ts` run against the live dev DB: 5 airports
+created, 12 flights created, 162 flights updated (upsert, confirmed
+non-destructive to existing `RosterMonth`/`Pairing`/`RosterEntry` rows —
+`src/ingest/writeToDb.ts` never deletes). Real read-only
+`generatePairingsForMonth` check confirmed all 7 destinations produce real
+candidate pairings for the live Oct 2026 A350 schedule (59-61 candidates
+each). Real read-only `buildMonthlyRosterForFleet` check: 0 RED both
+fleets after the update.
+
 ## Sources in use
 
 1. **Manual CSV/JSON import** — primary, always-available, zero

@@ -87,7 +87,27 @@ const NEW_AIRPORTS = [
   { iata: 'NRT', icao: 'RJAA', name: 'Narita International Airport', lat: 35.7720, lon: 140.3929, tz: 'Asia/Tokyo' },
   { iata: 'CMN', icao: 'GMMN', name: 'Mohammed V International Airport', lat: 33.3675, lon: -7.5900, tz: 'Africa/Casablanca' },
   { iata: 'MRU', icao: 'FIMP', name: 'Sir Seewoosagur Ramgoolam International Airport', lat: -20.4302, lon: 57.6836, tz: 'Indian/Mauritius' },
+
+  // --- New A350 destinations this quarter, user-supplied 2026-09-19 (see
+  // CONFIRM_2026_09_19 in the route table below).
+  { iata: 'HEL', icao: 'EFHK', name: 'Helsinki-Vantaa Airport', lat: 60.3172, lon: 24.9633, tz: 'Europe/Helsinki' },
+  { iata: 'LCA', icao: 'LCLK', name: 'Larnaca International Airport', lat: 34.8751, lon: 33.6249, tz: 'Asia/Nicosia' },
+  { iata: 'MLA', icao: 'LMML', name: 'Malta International Airport', lat: 35.8575, lon: 14.4775, tz: 'Europe/Malta' },
+  { iata: 'NBO', icao: 'HKJK', name: 'Jomo Kenyatta International Airport', lat: -1.3192, lon: 36.9278, tz: 'Africa/Nairobi' },
+  { iata: 'HAM', icao: 'EDDH', name: 'Hamburg Airport', lat: 53.6304, lon: 9.9882, tz: 'Europe/Berlin' },
 ];
+
+// CONFIRM_2026_09_19: shorthand appended to the sourceRef of every A350
+// route added/reconfirmed per the user's 2026-09-19 message ("New A350
+// route assignments this quarter include Kuala Lumpur, Helsinki, Larnaca,
+// Malta, Nairobi, Hamburg, and Mauritius"). Block times for the genuinely
+// new destinations (HEL/LCA/MLA/NBO/HAM) are ENGINEERING ESTIMATES derived
+// from great-circle distance, not sourced published schedule times — same
+// footing as this file's many pre-existing "reasonable estimate, not a
+// sourced fact" entries (see e.g. the RUH/DEL/ISB/CGK rows below). MRU
+// reuses the exact block time already CONFIRMED for its existing A380 row
+// below (325 min) — a real multi-type route, same pattern as KUL/BOM/TPE.
+const CONFIRM_2026_09_19 = 'user-supplied 2026-09-19 (new A350 quarterly route assignments)';
 
 // ---------------------------------------------------------------------------
 // Route table. blockOut/blockRet in minutes. `daysOfWeek` defaults to daily:
@@ -128,8 +148,18 @@ const A350_ROUTES = [
   { iata: 'TPE', blockOut: 530, conf: 'CONFIRMED', note: 'from 1 May 2026; now a confirmed multi-type route — see the new CONFIRMED A380 TPE row below, added per the user-supplied 2026-09-15 authoritative A380 destination list' },
   { iata: 'HKT', blockOut: 345, conf: 'CONFIRMED', note: '3rd-daily from 1 Jul 2026; modeled here as one representative daily line, not 3 separate frequencies' },
   { iata: 'CPT', blockOut: 590, conf: 'ADVERTISED', note: 'multi-type route — A350/777/A380 all serve CPT on different frequencies' },
-  { iata: 'KUL', blockOut: 440, conf: 'ADVERTISED', note: 'multi-type route — same pattern as CPT/AMM; corroborated by the user-supplied 2026-09-15 authoritative A380 destination list — see the new CONFIRMED A380 KUL row below' },
+  { iata: 'KUL', blockOut: 440, conf: 'CONFIRMED', note: `multi-type route — same pattern as CPT/AMM; corroborated by the user-supplied 2026-09-15 authoritative A380 destination list (see the CONFIRMED A380 KUL row below) and reconfirmed by the ${CONFIRM_2026_09_19}`, sourceBase: CONFIRM_2026_09_19 },
   { iata: 'CPH', blockOut: 395, conf: 'ADVERTISED', note: 'VOLATILITY: CPH is actively transitioning from A380 to A350/777 through late 2026 — treat current type as genuinely uncertain, re-verify before relying on this. See the A380 CPH row below, kept simultaneously to model the transition.' },
+
+  // --- New A350 destinations this quarter, user-supplied 2026-09-19 (see
+  // CONFIRM_2026_09_19 above). Block times are engineering estimates from
+  // great-circle distance, not sourced published schedule times.
+  { iata: 'HEL', blockOut: 400, conf: 'ADVERTISED', note: `new route this quarter, ${CONFIRM_2026_09_19}; block time is an engineering estimate (~5,600km great-circle), not a sourced fact`, sourceBase: CONFIRM_2026_09_19 },
+  { iata: 'LCA', blockOut: 210, conf: 'ADVERTISED', note: `new route this quarter, ${CONFIRM_2026_09_19}; block time is an engineering estimate (~2,700km great-circle), not a sourced fact`, sourceBase: CONFIRM_2026_09_19 },
+  { iata: 'MLA', blockOut: 310, conf: 'ADVERTISED', note: `new route this quarter, ${CONFIRM_2026_09_19}; block time is an engineering estimate (~4,300km great-circle), not a sourced fact`, sourceBase: CONFIRM_2026_09_19 },
+  { iata: 'NBO', blockOut: 285, conf: 'ADVERTISED', note: `new route this quarter, ${CONFIRM_2026_09_19}; block time is an engineering estimate (~3,300km great-circle), not a sourced fact`, sourceBase: CONFIRM_2026_09_19 },
+  { iata: 'HAM', blockOut: 380, conf: 'ADVERTISED', note: `new route this quarter, ${CONFIRM_2026_09_19}; block time is an engineering estimate (~5,100km great-circle), not a sourced fact`, sourceBase: CONFIRM_2026_09_19 },
+  { iata: 'MRU', blockOut: 325, conf: 'CONFIRMED', note: `new A350 route this quarter, ${CONFIRM_2026_09_19} — multi-type route, block time reuses the value already CONFIRMED for the existing A380 MRU row below (same pattern as KUL/BOM/TPE)`, sourceBase: CONFIRM_2026_09_19 },
 ];
 
 // CONFIRM_2026_09_15: shorthand appended below to the sourceRef of every
@@ -248,7 +278,7 @@ for (const route of A350_ROUTES) {
   const blockRet = route.blockRet ?? route.blockOut;
   const num = a350Num;
   a350Num += 2;
-  const baseRef = 'user-supplied 2026-09-14 + research corroboration';
+  const baseRef = route.sourceBase ?? 'user-supplied 2026-09-14 + research corroboration';
   const sourceRef = route.note ? `${baseRef} (${route.note})` : baseRef;
 
   const stdOut = stdForRoute(route.iata, 350);

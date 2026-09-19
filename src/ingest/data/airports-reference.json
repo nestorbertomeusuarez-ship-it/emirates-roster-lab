@@ -582,5 +582,45 @@
     "lat": -20.4302,
     "lon": 57.6836,
     "tz": "Indian/Mauritius"
+  },
+  {
+    "iata": "HEL",
+    "icao": "EFHK",
+    "name": "Helsinki-Vantaa Airport",
+    "lat": 60.3172,
+    "lon": 24.9633,
+    "tz": "Europe/Helsinki"
+  },
+  {
+    "iata": "LCA",
+    "icao": "LCLK",
+    "name": "Larnaca International Airport",
+    "lat": 34.8751,
+    "lon": 33.6249,
+    "tz": "Asia/Nicosia"
+  },
+  {
+    "iata": "MLA",
+    "icao": "LMML",
+    "name": "Malta International Airport",
+    "lat": 35.8575,
+    "lon": 14.4775,
+    "tz": "Europe/Malta"
+  },
+  {
+    "iata": "NBO",
+    "icao": "HKJK",
+    "name": "Jomo Kenyatta International Airport",
+    "lat": -1.3192,
+    "lon": 36.9278,
+    "tz": "Africa/Nairobi"
+  },
+  {
+    "iata": "HAM",
+    "icao": "EDDH",
+    "name": "Hamburg Airport",
+    "lat": 53.6304,
+    "lon": 9.9882,
+    "tz": "Europe/Berlin"
   }
 ]
