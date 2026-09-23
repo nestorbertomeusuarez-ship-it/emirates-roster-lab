@@ -622,5 +622,13 @@
     "lat": 53.6304,
     "lon": 9.9882,
     "tz": "Europe/Berlin"
+  },
+  {
+    "iata": "DME",
+    "icao": "UUDD",
+    "name": "Moscow Domodedovo Airport",
+    "lat": 55.4088,
+    "lon": 37.9063,
+    "tz": "Europe/Moscow"
   }
 ]

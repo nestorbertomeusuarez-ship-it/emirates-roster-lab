@@ -289,3 +289,40 @@ Every `Flight` row carries provenance metadata (see `prisma/schema.prisma`):
   default-resolution rules, and the deviation note in
   `prisma/schema.prisma` for why this is a `String` column rather than a
   Prisma enum (SQLite does not support native enums).
+
+## 2026-09-23 structural findings follow-up
+
+Re-researched the three structural findings above ("Structural findings
+surfaced, deliberately NOT auto-applied"). Evidence is web-search based
+(airline/aggregator pages), dated 2026-09-23.
+
+- **SVO -> DME: APPLIED.** Aggregator schedule data (flightconnections.com
+  DXB-DME/DME-DXB, Aug 2026: 14/21 weekly, Emirates the only nonstop
+  operator) and AeroRoutes (2026-04-07, "Emirates Restores Additional
+  Moscow Flights", Moscow-Domodedovo A380 daily + 777-300ER) both place the
+  Emirates nonstop Moscow service at **DME**, not SVO. The A380 route row
+  in `scripts/gen-seed-data.mjs` now targets DME (EK475/EK476), and DME
+  (UUDD, Europe/Moscow) was added to `airports-reference.json`. SVO stays in
+  the reference file (append-only), unreferenced by any flight. Block time
+  (305min) is carried over from the SVO estimate, not sourced; the STD
+  remains synthetic. Guarded by `src/ingest/seedSchedule.test.ts`.
+- **LCA/MLA: CONFIRMED as one tag-on rotation, NOT modeled.** Emirates
+  operates DXB-LCA-MLA with fifth-freedom rights on LCA-MLA (EK109/EK110;
+  emirates.com LCA-MLA route page, aviator.aero "Emirates restarts flights
+  to Malta via Larnaca", simpleflying "Emirates To Resume Daily Service To
+  Malta"; summer 2026 EK109 LCA 12:15 -> MLA 14:00 on 777-300ER). The seed
+  still models two independent DXB nonstops. Modeling it properly needs a
+  pairing-engine change: `generatePairings` applies `minLayoverMinutes`
+  (8h) to every connection, so a ~1h tag-on turnaround at LCA can never
+  chain, and FTL would need to treat it as a multi-sector FDP. Deferred as
+  its own feature by user decision (2026-09-23) rather than risking the FTL
+  evaluation of a real roster. The observed 777-300ER equipment also
+  conflicts with the A350 fleet assignment from the 2026-09-19 quarterly
+  update; unresolved.
+- **CHC: CONFIRMED not a DXB nonstop, NOT modeled.** EK412/EK413 operate
+  as a SYD-CHC-SYD A380 tag-on of the Dubai-Sydney service (FlightAware,
+  Executive Traveller). One source (flightmapper) suggests that from
+  2026-10-04 EK413 no longer routes via CHC, i.e. the CHC tag may not operate
+  in October 2026 at all. Low confidence; same tag-on engine limitation as
+  LCA/MLA. The fictional DXB-CHC nonstop row is kept as-is with its
+  existing judgment-call note.

@@ -87,6 +87,7 @@ export const AIRPORT_CITY_NAMES: Readonly<Record<string, string>> = {
   SGN: 'Ho Chi Minh City',
   SIN: 'Singapore',
   SVO: 'Moscow',
+  DME: 'Moscow',
   SYD: 'Sydney',
   TPE: 'Taipei',
   VIE: 'Vienna',
