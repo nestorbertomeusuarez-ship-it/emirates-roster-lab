@@ -8,7 +8,7 @@
  */
 export function ComplianceBanner() {
   return (
-    <p className="bg-amber-50 border-b border-amber-200 px-6 py-2 text-xs text-amber-900 text-center dark:bg-amber-950 dark:border-amber-900 dark:text-amber-200">
+    <p className="bg-surface border-b border-rule px-6 py-2 text-xs text-amber text-center">
       personal planning tool, not an operational document, does not replace
       the official roster or the operator&apos;s OM-A.
     </p>

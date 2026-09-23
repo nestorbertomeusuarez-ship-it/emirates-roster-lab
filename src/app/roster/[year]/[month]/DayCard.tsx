@@ -56,52 +56,15 @@ interface DayCardProps {
   isToday: boolean;
 }
 
-const CATEGORY_BADGES: Record<CalendarBadgeCategory, { label: string; icon: string; className: string }> = {
-  FLIGHT: {
-    label: 'Flight',
-    icon: '✈',
-    className: 'bg-sky-100 text-sky-900 dark:bg-sky-900 dark:text-sky-100',
-  },
-  LAYOVER: {
-    label: 'Layover',
-    icon: '\u{1F319}',
-    className: 'bg-violet-100 text-violet-900 dark:bg-violet-900 dark:text-violet-100',
-  },
-  DXB_OFF: {
-    label: 'Off · DXB',
-    icon: '\u{1F3E0}',
-    className: 'bg-slate-100 text-slate-900 dark:bg-slate-700 dark:text-slate-100',
-  },
-  // Real duty types that classifyDayCategory collapses to DXB_OFF for
-  // evaluation purposes (item 11) — resolveCalendarBadgeCategory widens
-  // them back out for the calendar badge so they don't misread as a real
-  // day off (see dayPresentation.ts's doc comment).
-  STANDBY: {
-    label: 'Standby',
-    icon: '\u{1F4DE}',
-    className: 'bg-orange-100 text-orange-900 dark:bg-orange-900 dark:text-orange-100',
-  },
-  SIM: {
-    label: 'Sim',
-    icon: '\u{1F5A5}',
-    className: 'bg-indigo-100 text-indigo-900 dark:bg-indigo-900 dark:text-indigo-100',
-  },
-  GROUND_SCHOOL: {
-    label: 'Ground school',
-    icon: '\u{1F4DA}',
-    className: 'bg-teal-100 text-teal-900 dark:bg-teal-900 dark:text-teal-100',
-  },
-  VACATION: {
-    label: 'Vacation',
-    icon: '\u{1F334}',
-    className: 'bg-lime-100 text-lime-900 dark:bg-lime-900 dark:text-lime-100',
-  },
-};
-
-const SEVERITY_BADGES: Record<Severity, string> = {
-  RED: 'bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100',
-  AMBER: 'bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100',
-  GREEN: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100',
+/** Small colored dot + sentence-case label for a non-flight, non-off duty type. */
+const OTHER_DUTY_DOTS: Record<
+  'STANDBY' | 'SIM' | 'GROUND_SCHOOL' | 'VACATION',
+  { label: string; dotClassName: string }
+> = {
+  STANDBY: { label: 'Standby', dotClassName: 'bg-amber' },
+  SIM: { label: 'Sim', dotClassName: 'bg-flight' },
+  GROUND_SCHOOL: { label: 'Ground school', dotClassName: 'bg-ok' },
+  VACATION: { label: 'Vacation', dotClassName: 'bg-muted' },
 };
 
 // Mon-first, matching page.tsx's WEEKDAY_HEADERS order and its established
@@ -116,70 +79,11 @@ function weekdayLabelFor(date: string): string {
   return MOBILE_WEEKDAY_LABELS[(utcDay + 6) % 7];
 }
 
-// Same 'HhMMm' format `PairingTimeline.tsx#formatMinutes` already uses for
-// block/duty times — kept consistent rather than inventing a third format
-// (see this project's dutyTimes.ts / CompliancePanel.tsx conventions).
-function formatMinutes(minutes: number): string {
+/** 'HhMM' — no trailing 'm', matching the header totals ("89h30", "104h30"). */
+function formatHM(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  return `${hours}h${String(mins).padStart(2, '0')}m`;
-}
-
-/**
- * Compact one-line flight/layover summary rendered directly under a FLIGHT-
- * category day's existing "FLIGHT (2d)" label/link — not replacing it (see
- * flightDaySummary.ts's doc comment). Deliberately terse: this project just
- * went through a decluttering pass to reduce card density (see the
- * `<details>` disclosure below), so this is a quick at-a-glance addition,
- * not a repeat of the full pairing-detail timeline.
- */
-function FlightSummaryLine({ summary }: { summary: FlightDaySummary }) {
-  if (summary.category === 'LAYOVER') {
-    return (
-      <div className="text-zinc-500 dark:text-zinc-400 text-xs md:text-[10px]">
-        at {cityLabel(summary.atIata)} &middot; {formatMinutes(summary.layoverMinutes)} layover
-      </div>
-    );
-  }
-  // Direct user feedback (2026-09-18): "incluye en cada dia de vuelo la
-  // hora de reporting time" — report time is computed as STD minus
-  // DEFAULT_REPORT_OFFSET_MINUTES (dutyTimes.ts, always an assumption, not
-  // a confirmed EK policy value), local to the day's first departure
-  // station, same source already used for dutyMinutes below.
-  return (
-    <div className="text-zinc-500 dark:text-zinc-400 text-xs md:text-[10px]">
-      rep {summary.reportLocalTime} &middot;{' '}
-      {summary.route.split('→').map(cityLabel).join(' → ')} &middot;{' '}
-      {formatMinutes(summary.blockMinutes)} blk &middot; {formatMinutes(summary.dutyMinutes)} duty
-    </div>
-  );
-}
-
-// Direct user feedback (2026-09-17): "Pairing cont'd (day 2)" read as
-// unclear jargon on continuation days, and gave no sense of the trip's
-// total length there (only the start day's "FLIGHT (3d)" suffix showed
-// that). Unified into one "Day X/Y" progress label used identically on
-// every day of a multi-day trip — start and continuation alike — so the
-// whole trip's shape is legible from any single cell. A same-day
-// out-and-back (spansDays <= 1, or no pairing context at all) just says
-// "Flight": "Day 1/1" would be redundant noise for the common case.
-function tripDayLabel(dayOfPairing: number | null, spansDays: number | null): string {
-  if (dayOfPairing === null || spansDays === null || spansDays <= 1) return 'Flight';
-  return `Day ${dayOfPairing}/${spansDays}`;
-}
-
-// Direct user feedback (2026-09-17): "en los dias que haya flight pon el
-// destino en la misma linea" — the destination used to only appear on the
-// separate FlightSummaryLine below the day/trip label. Extracts just the
-// day's final arrival station (the route's last leg, for a same-day
-// multi-leg transit day too) to append inline on the label line itself.
-// Also direct user feedback: "añade al codigo IATA de destino el nombre
-// de la ciudad, dxb no hace falta" — see src/lib/airportCityNames.ts.
-function flightDestination(summary: FlightDaySummary | null): string {
-  if (!summary || summary.category !== 'FLIGHT') return '';
-  const legs = summary.route.split('→');
-  const lastLeg = legs[legs.length - 1];
-  return lastLeg ? cityLabel(lastLeg) : '';
+  return `${hours}h${String(mins).padStart(2, '0')}`;
 }
 
 function summarizePairing(pairing: GeneratedPairing): string {
@@ -194,6 +98,9 @@ function summarizePairing(pairing: GeneratedPairing): string {
       : '';
   return `${pairing.fleetType} ${route.join('→')}${layoverNote} — ${pairing.tripDays}d`;
 }
+
+const focusRing =
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-flight';
 
 /**
  * One calendar-day cell in the roster grid. Plain click-to-assign forms —
@@ -214,19 +121,23 @@ export default function DayCard({
   isToday,
 }: DayCardProps) {
   const dayNumber = Number(date.slice(8, 10));
-  // Only show the category chip when a day actually carries a real
-  // assignment (an entry, or a continuation day of one) — an unassigned day
-  // has nothing decided yet and stays as plain "unassigned" text below,
-  // rather than presenting as a confirmed DXB day off (see
+  // Only show a duty label when a day actually carries a real assignment (an
+  // entry, or a continuation day of one) — an unassigned day has nothing
+  // decided yet and recedes to plain "Off" text below, rather than
+  // presenting as a confirmed DXB day off (see
   // docs/roster-gen-assumptions.md item 12).
-  const resolvedCategory =
+  const resolvedCategory: CalendarBadgeCategory | null =
     category && (entry || isPairingContinuation)
       ? // `RosterEntry.dutyType` is a Prisma `String` column (SQLite has no
         // native enum support — see prisma/schema.prisma's documented
         // deviation), constrained to `DutyType` at the application layer.
         resolveCalendarBadgeCategory(category, entry?.dutyType as DutyType | undefined)
       : null;
-  const categoryBadge = resolvedCategory ? CATEGORY_BADGES[resolvedCategory] : null;
+
+  const otherDutyBadge =
+    resolvedCategory && resolvedCategory in OTHER_DUTY_DOTS
+      ? OTHER_DUTY_DOTS[resolvedCategory as keyof typeof OTHER_DUTY_DOTS]
+      : null;
 
   // Phase 5 Slice 4 — deep-link a FLIGHT-category day (an actual flying leg
   // operates this exact date, per dayPresentation.ts#classifyDayCategory)
@@ -240,6 +151,45 @@ export default function DayCard({
     category === 'FLIGHT' && entry?.dutyType === 'FLIGHT' && entry.pairingId
       ? `/roster/${year}/${month}/pairing/${entry.pairingId}`
       : null;
+
+  // A day belongs to a pairing's trip band when it's the pairing's own
+  // FLIGHT-dutyType entry (start day) or a continuation day of one.
+  const isTripDay = isPairingContinuation || entry?.dutyType === 'FLIGHT';
+  const spansDays = entry?.spansDays ?? null;
+  const isSingleDayTrip = dayOfPairing === null || spansDays === null || spansDays <= 1;
+  const isFirstDayOfTrip = isSingleDayTrip || dayOfPairing === 1;
+  const isLastDayOfTrip = isSingleDayTrip || (spansDays !== null && dayOfPairing === spansDays);
+  const bandRoundingClass = [
+    isFirstDayOfTrip ? 'rounded-l-md' : '',
+    isLastDayOfTrip ? 'rounded-r-md' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const bandLabel = (() => {
+    if (category === 'FLIGHT' && flightSummary?.category === 'FLIGHT') {
+      // `cityLabel` already renders "KIX (Osaka)" for a non-DXB station, so
+      // only the intermediate codes are joined with a dash — the final leg
+      // gets its city name from `cityLabel` itself, e.g. "DXB–KIX (Osaka)".
+      const legs = flightSummary.route.split('→');
+      const lastLeg = cityLabel(legs[legs.length - 1]);
+      return [...legs.slice(0, -1), lastLeg].join('–');
+    }
+    if (category === 'LAYOVER' && flightSummary?.category === 'LAYOVER') {
+      return `${cityLabel(flightSummary.atIata)} layover`;
+    }
+    return category === 'FLIGHT' ? 'Flight' : 'Layover';
+  })();
+
+  const bandContent = (
+    <div
+      className={`-mx-3 md:-mx-2 min-h-[26px] flex items-center px-2 text-xs md:text-[11px] font-display font-semibold ${bandRoundingClass} ${
+        category === 'FLIGHT' ? 'bg-flight text-white' : 'bg-flight-soft text-ink'
+      }`}
+    >
+      {bandLabel}
+    </div>
+  );
 
   // Declutter (Phase 5 UI slice, 2026-09-15): the duty-type form, the
   // pairing-reassignment form, and the "clear" link (the last only relevant
@@ -258,7 +208,7 @@ export default function DayCard({
         <input type="hidden" name="month" value={month} />
         <select
           name="dutyType"
-          className="border rounded flex-1 min-w-0"
+          className={`flex-1 min-w-0 rounded border border-rule bg-surface px-1 py-0.5 text-ink text-xs md:text-[10px] ${focusRing}`}
           defaultValue="OFF"
           aria-label={`Duty type for ${date}`}
         >
@@ -268,7 +218,11 @@ export default function DayCard({
             </option>
           ))}
         </select>
-        <button type="submit" className="border rounded px-1" aria-label={`Set duty type for ${date}`}>
+        <button
+          type="submit"
+          className={`rounded border border-rule px-1.5 py-0.5 text-xs md:text-[10px] text-ink hover:bg-flight-soft ${focusRing}`}
+          aria-label={`Set duty type for ${date}`}
+        >
           Set
         </button>
       </form>
@@ -281,7 +235,7 @@ export default function DayCard({
           <input type="hidden" name="month" value={month} />
           <select
             name="pairingIndex"
-            className="border rounded flex-1 min-w-0"
+            className={`flex-1 min-w-0 rounded border border-rule bg-surface px-1 py-0.5 text-ink text-xs md:text-[10px] ${focusRing}`}
             aria-label={`Pairing candidate for ${date}`}
           >
             {candidates.map((pairing, index) => (
@@ -290,7 +244,11 @@ export default function DayCard({
               </option>
             ))}
           </select>
-          <button type="submit" className="border rounded px-1" aria-label={`Assign pairing for ${date}`}>
+          <button
+            type="submit"
+            className={`rounded border border-rule px-1.5 py-0.5 text-xs md:text-[10px] text-ink hover:bg-flight-soft ${focusRing}`}
+            aria-label={`Assign pairing for ${date}`}
+          >
             Fly
           </button>
         </form>
@@ -304,10 +262,10 @@ export default function DayCard({
           <input type="hidden" name="month" value={month} />
           <button
             type="submit"
-            className="text-zinc-400 underline"
+            className={`text-muted underline text-xs md:text-[10px] ${focusRing}`}
             aria-label={`Clear duty for ${date}`}
           >
-            clear
+            Clear
           </button>
         </form>
       )}
@@ -316,96 +274,83 @@ export default function DayCard({
 
   return (
     <div
-      className={`border rounded p-3 md:p-2 md:min-h-[9rem] flex flex-col gap-1.5 md:gap-1 text-sm md:text-xs ${
-        isToday ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
+      className={`group relative flex flex-col gap-1.5 bg-surface border border-rule rounded-lg p-3 text-sm md:rounded-none md:border-0 md:p-2 md:text-xs md:min-h-[8.5rem] ${
+        isToday ? 'ring-2 ring-inset ring-flight' : ''
       }`}
     >
-      <div className="font-semibold text-base md:text-sm flex items-center gap-1.5 md:gap-1">
-        {dayNumber}
-        <span className="md:hidden font-normal text-xs text-zinc-500 dark:text-zinc-400">
-          {weekdayLabelFor(date)}
-        </span>
-        {isToday && (
+      <div className="flex items-center gap-1.5">
+        {isToday ? (
+          <span className="inline-flex items-center justify-center rounded-full bg-flight text-white w-6 h-6 font-display text-sm font-semibold">
+            {dayNumber}
+          </span>
+        ) : (
           <span
-            className="rounded px-1 py-0.5 text-[10px] font-semibold bg-blue-100 text-blue-900 dark:bg-blue-900 dark:text-blue-100"
-            title="Today"
+            className={`font-display font-semibold text-base md:text-[15px] ${
+              !isTripDay && !otherDutyBadge ? 'text-muted' : 'text-ink'
+            }`}
           >
-            Today
+            {dayNumber}
           </span>
         )}
+        <span className="md:hidden font-normal text-xs text-muted">{weekdayLabelFor(date)}</span>
       </div>
 
-      {(categoryBadge || severity) && (
-        <div className="flex flex-wrap gap-1">
-          {categoryBadge && (
-            <span
-              className={`rounded px-1 py-0.5 inline-flex items-center gap-0.5 ${categoryBadge.className}`}
-              title={`Day category: ${categoryBadge.label}`}
-            >
-              <span aria-hidden="true">{categoryBadge.icon}</span>
-              {categoryBadge.label}
-            </span>
-          )}
-          {severity && (
-            <Link
-              href={`#${date}`}
-              className={`rounded px-1 py-0.5 font-semibold ${SEVERITY_BADGES[severity]}`}
-              title={`Worst GCAA compliance severity: ${severity} — jump to detail`}
-              aria-label={`Worst GCAA compliance severity ${severity} for ${date} — jump to compliance detail`}
-            >
-              {severity}
-            </Link>
-          )}
-        </div>
+      {severity && severity !== 'GREEN' && (
+        <Link
+          href={`#${date}`}
+          className={`absolute top-2 right-2 md:top-1.5 md:right-1.5 inline-flex items-center gap-1 rounded text-[10px] font-medium ${
+            severity === 'RED' ? 'text-red' : 'text-amber'
+          } ${focusRing}`}
+          title={`Worst GCAA compliance severity: ${severity} — jump to detail`}
+          aria-label={`Worst GCAA compliance severity ${severity} for ${date} — jump to compliance detail`}
+        >
+          <span
+            className={`inline-block w-1.5 h-1.5 rounded-full ${
+              severity === 'RED' ? 'bg-red' : 'bg-amber'
+            }`}
+            aria-hidden="true"
+          />
+          {severity === 'RED' ? 'Illegal' : 'Check'}
+        </Link>
       )}
 
-      {isPairingContinuation ? (
-        <>
-          {pairingHref ? (
-            <Link
-              href={pairingHref}
-              className="rounded bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100 px-1 py-0.5 block underline"
-            >
-              {tripDayLabel(dayOfPairing, entry?.spansDays ?? null)}
-              {flightDestination(flightSummary) && ` → ${flightDestination(flightSummary)}`}
-            </Link>
-          ) : (
-            <div className="rounded bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100 px-1 py-0.5">
-              {tripDayLabel(dayOfPairing, entry?.spansDays ?? null)}
-              {flightDestination(flightSummary) && ` → ${flightDestination(flightSummary)}`}
-            </div>
-          )}
-          {flightSummary && <FlightSummaryLine summary={flightSummary} />}
-        </>
-      ) : entry ? (
-        <>
-          {pairingHref ? (
-            <Link
-              href={pairingHref}
-              className="rounded bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 px-1 py-0.5 block underline"
-            >
-              {entry.dutyType === 'FLIGHT'
-                ? tripDayLabel(dayOfPairing, entry.spansDays)
-                : entry.dutyType}
-              {entry.dutyType === 'FLIGHT' &&
-                flightDestination(flightSummary) &&
-                ` → ${flightDestination(flightSummary)}`}
-            </Link>
-          ) : (
-            <div className="rounded bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 px-1 py-0.5">
-              {entry.dutyType === 'FLIGHT'
-                ? tripDayLabel(dayOfPairing, entry.spansDays)
-                : entry.dutyType}
-              {entry.dutyType === 'FLIGHT' &&
-                flightDestination(flightSummary) &&
-                ` → ${flightDestination(flightSummary)}`}
-            </div>
-          )}
-          {flightSummary && <FlightSummaryLine summary={flightSummary} />}
-        </>
-      ) : (
-        <div className="text-zinc-400">unassigned</div>
-      )}
+      <div className="flex-1 flex flex-col gap-1">
+        {isTripDay ? (
+          <>
+            {pairingHref ? (
+              <Link href={pairingHref} className={`block rounded ${focusRing}`}>
+                {bandContent}
+              </Link>
+            ) : (
+              bandContent
+            )}
+            {flightSummary?.category === 'FLIGHT' && (
+              <div className="flex flex-col gap-0.5 text-muted tabular-nums">
+                <span>Report {flightSummary.reportLocalTime}</span>
+                <span>
+                  {formatHM(flightSummary.blockMinutes)} block{' '}
+                  <span className="ml-1.5">{formatHM(flightSummary.dutyMinutes)} duty</span>
+                </span>
+              </div>
+            )}
+            {flightSummary?.category === 'LAYOVER' && (
+              <div className="text-muted tabular-nums">
+                {formatHM(flightSummary.layoverMinutes)} on the ground
+              </div>
+            )}
+          </>
+        ) : otherDutyBadge ? (
+          <div className="flex items-center gap-1.5 text-muted">
+            <span
+              className={`inline-block w-1.5 h-1.5 rounded-full ${otherDutyBadge.dotClassName}`}
+              aria-hidden="true"
+            />
+            {otherDutyBadge.label}
+          </div>
+        ) : (
+          <div className="text-muted">Off</div>
+        )}
+      </div>
 
       {!isPairingContinuation &&
         (entry ? (
@@ -414,17 +359,17 @@ export default function DayCard({
           // comment) — a `'use client'` + `useState` toggle was considered
           // and rejected as a bigger architectural change than this slice
           // calls for, since the native element already does the job.
-          <details className="mt-0.5">
+          <details className="mt-auto md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 open:opacity-100">
             <summary
-              className="cursor-pointer select-none text-zinc-500 dark:text-zinc-400 underline text-xs md:text-[10px]"
+              className="cursor-pointer select-none text-muted text-xs md:text-[10px]"
               aria-label={`Change duty for ${date}`}
             >
-              change
+              Change
             </summary>
             <div className="flex flex-col gap-1.5 md:gap-1 mt-1">{reassignmentForms}</div>
           </details>
         ) : (
-          <div className="flex flex-col gap-1.5 md:gap-1">{reassignmentForms}</div>
+          <div className="flex flex-col gap-1.5 md:gap-1 mt-auto">{reassignmentForms}</div>
         ))}
     </div>
   );

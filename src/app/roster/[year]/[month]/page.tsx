@@ -33,7 +33,7 @@ import { generateRosterAction } from './actions';
 import { buildDayCategoryMap, buildWorstSeverityMap } from './dayPresentation';
 import { buildFlightDaySummaryMap } from './flightDaySummary';
 import { buildMonthSummary } from './monthSummary';
-import { nextMonth, previousMonth } from './adjacentMonth';
+import { nextMonth, previousMonth, type YearMonth } from './adjacentMonth';
 import { hasNoScheduleDataForMonth } from './emptyScheduleData';
 
 const UI_PAIRING_CONSTRAINTS = {
@@ -44,12 +44,28 @@ const UI_PAIRING_CONSTRAINTS = {
 
 const WEEKDAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-// Same 'HhMMm' format DayCard.tsx/PairingTimeline.tsx already use for
-// block/duty times — kept consistent rather than inventing a fourth format.
-function formatMinutes(minutes: number): string {
+const focusRing =
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-flight rounded';
+
+/** 'HhMM' — no trailing 'm', e.g. "89h30". */
+function formatHM(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  return `${hours}h${String(mins).padStart(2, '0')}m`;
+  return `${hours}h${String(mins).padStart(2, '0')}`;
+}
+
+function monthTitle(ym: YearMonth): string {
+  return new Date(Date.UTC(ym.year, ym.month - 1, 1)).toLocaleString('en-GB', {
+    month: 'long',
+    timeZone: 'UTC',
+  });
+}
+
+function monthShortName(ym: YearMonth): string {
+  return new Date(Date.UTC(ym.year, ym.month - 1, 1)).toLocaleString('en-GB', {
+    month: 'short',
+    timeZone: 'UTC',
+  });
 }
 
 interface RosterMonthPageProps {
@@ -131,8 +147,8 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
 
   if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
     return (
-      <main className="p-6 max-w-xl mx-auto">
-        <p className="text-red-600">
+      <main className="p-6 max-w-xl mx-auto bg-paper text-ink">
+        <p className="text-red">
           Invalid roster URL — expected /roster/&lt;year&gt;/&lt;month 1-12&gt;.
         </p>
       </main>
@@ -219,72 +235,93 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
   const isCurrentMonth = nowUTC.getUTCFullYear() === year && nowUTC.getUTCMonth() + 1 === month;
 
   return (
-    <main className="p-6 max-w-5xl mx-auto">
-      <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
-        <h1 className="text-xl font-semibold">
-          Roster — {year}-{String(month).padStart(2, '0')}
-        </h1>
-        <div className="flex flex-col items-end gap-1">
-          <nav className="flex items-center gap-3 text-xs">
-            <Link href={`/roster/${prev.year}/${prev.month}`} className="underline">
-              ← Prev
-            </Link>
-            <Link href={`/roster/${next.year}/${next.month}`} className="underline">
-              Next →
-            </Link>
-            <Link href="/roster" className="underline text-zinc-400">
-              ← All months
-            </Link>
-          </nav>
+    <main className="w-full max-w-6xl mx-auto px-4 md:px-8 py-8 bg-paper text-ink">
+      <header className="mb-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-display text-[28px] md:text-[32px] font-semibold text-ink">
+              {monthTitle({ year, month })} {year}
+            </h1>
+            <nav className="flex items-center gap-3 text-xs text-muted mt-1">
+              <Link
+                href={`/roster/${prev.year}/${prev.month}`}
+                aria-label="Previous month"
+                className={`hover:text-ink ${focusRing}`}
+              >
+                ‹ {monthShortName(prev)}
+              </Link>
+              <Link
+                href={`/roster/${next.year}/${next.month}`}
+                aria-label="Next month"
+                className={`hover:text-ink ${focusRing}`}
+              >
+                {monthShortName(next)} ›
+              </Link>
+              <Link href="/roster" className={`hover:text-ink ${focusRing}`}>
+                All months
+              </Link>
+            </nav>
+          </div>
+
           {/* Direct user feedback (2026-09-17): whole-month totals at a
               glance — see monthSummary.ts. */}
-          <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-            <span title="Total block time this month">
-              {formatMinutes(monthSummary.totalBlockMinutes)} blk
-            </span>
-            <span>&middot;</span>
-            <span title="Total duty time this month">
-              {formatMinutes(monthSummary.totalDutyMinutes)} duty
-            </span>
-            <span>&middot;</span>
-            <span title="Days off at home base (DXB) this month">
-              {monthSummary.dxbDaysOff} DXB off
-            </span>
+          <div className="flex items-start gap-5">
+            <div className="text-right">
+              <div className="font-display text-lg font-semibold text-ink tabular-nums">
+                {formatHM(monthSummary.totalBlockMinutes)}
+              </div>
+              <div className="text-muted text-xs mt-0.5">Block</div>
+            </div>
+            <div className="text-right">
+              <div className="font-display text-lg font-semibold text-ink tabular-nums">
+                {formatHM(monthSummary.totalDutyMinutes)}
+              </div>
+              <div className="text-muted text-xs mt-0.5">Duty</div>
+            </div>
+            <div className="text-right">
+              <div className="font-display text-lg font-semibold text-ink tabular-nums">
+                {monthSummary.dxbDaysOff}
+              </div>
+              <div className="text-muted text-xs mt-0.5">Days off at DXB</div>
+            </div>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Moved above the calendar (direct user feedback, 2026-09-17):
           generation is the primary "build my month" action, not a footnote
           below the compliance panel. */}
-      <section className="border rounded p-3 mb-6 text-xs">
-        <h2 className="text-sm font-semibold mb-2">Automatic roster generation</h2>
-        <p className="text-zinc-500 mb-2">
-          Produces a full, GCAA-baseline-compliant 30-day FLIGHT/OFF assignment for one
-          fleet type — see docs/roster-gen-assumptions.md for what this generator does NOT
-          model (12-month rolling limits, Emirates FTL Variation/augmented-crew schemes,
-          pay/fatigue optimization). You can still adjust individual days manually afterward.
+      <section className="bg-surface border border-rule rounded-lg p-3 mb-6 text-xs">
+        <h2 className="font-display text-sm font-semibold mb-2 text-ink">
+          Automatic roster generation
+        </h2>
+        <p className="text-muted mb-3">
+          Builds a legal FLIGHT/OFF month for one fleet. You can still change any day afterwards.
         </p>
 
         {genSummary && (
           <div
-            className={`rounded px-2 py-1 mb-2 ${
-              genSummary.redCount > 0
-                ? 'bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100'
-                : 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100'
+            className={`bg-paper border-l-[3px] rounded px-3 py-2 mb-3 ${
+              genSummary.redCount > 0 ? 'border-red' : 'border-ok'
             }`}
           >
-            Generated {genSummary.fleetType} roster: {genSummary.flightDays} FLIGHT day
-            {genSummary.flightDays === 1 ? '' : 's'}, {genSummary.offDays} OFF day
-            {genSummary.offDays === 1 ? '' : 's'},{' '}
-            {(genSummary.totalBlockMinutes / 60).toFixed(1)}h total block time across{' '}
-            {genSummary.pairingsAssigned} pairing{genSummary.pairingsAssigned === 1 ? '' : 's'}.{' '}
-            {genSummary.redCount > 0
-              ? `${genSummary.redCount} RED FTL compliance flag(s) — this indicates a bug in the generator, review before relying on this roster.`
-              : 'No FTL compliance flags from the post-generation verification pass.'}
+            <div className="text-ink">
+              {genSummary.fleetType} roster generated: {genSummary.flightDays} flight day
+              {genSummary.flightDays === 1 ? '' : 's'}, {genSummary.offDays} day
+              {genSummary.offDays === 1 ? '' : 's'} off,{' '}
+              {(genSummary.totalBlockMinutes / 60).toFixed(1)}h block across{' '}
+              {genSummary.pairingsAssigned} pairing{genSummary.pairingsAssigned === 1 ? '' : 's'}.
+            </div>
+            <div className={genSummary.redCount > 0 ? 'text-red' : 'text-muted'}>
+              {genSummary.redCount > 0
+                ? `${genSummary.redCount} compliance flag${
+                    genSummary.redCount === 1 ? '' : 's'
+                  } — this indicates a generator bug, review before flying this.`
+                : 'No compliance flags from the check.'}
+            </div>
             {genSummary.offDays > 0 && (
-              <div className="text-sm opacity-80 mt-1">
-                {genSummary.offDays} OFF: {formatOffReasonCounts(genSummary.offReasonCounts)}
+              <div className="text-muted mt-1">
+                Off days: {formatOffReasonCounts(genSummary.offReasonCounts)}
               </div>
             )}
           </div>
@@ -298,15 +335,19 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
         <form action={generateRosterAction} className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="year" value={year} />
           <input type="hidden" name="month" value={month} />
-          <label className="flex items-center gap-1">
-            Fleet:
-            <select name="fleetType" className="border rounded" defaultValue="A350">
+          <label className="flex items-center gap-1.5 text-ink">
+            Fleet
+            <select
+              name="fleetType"
+              className={`rounded border border-rule bg-surface px-1.5 py-1 ${focusRing}`}
+              defaultValue="A350"
+            >
               <option value="A350">A350</option>
               <option value="A380">A380</option>
             </select>
           </label>
-          <label className="flex items-center gap-1">
-            Target block hours (optional):
+          <label className="flex items-center gap-1.5 text-ink">
+            Block hours
             <input
               type="number"
               name="targetBlockHoursMin"
@@ -331,9 +372,9 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
               // most months without starving legality/pacing to chase it.
               defaultValue={70}
               placeholder="e.g. 70"
-              className="border rounded w-16"
+              className={`w-14 rounded border border-rule bg-surface px-1.5 py-1 tabular-nums ${focusRing}`}
             />
-            to
+            <span className="text-muted">to</span>
             <input
               type="number"
               name="targetBlockHoursMax"
@@ -341,7 +382,7 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
               step="1"
               defaultValue={90}
               placeholder="e.g. 90"
-              className="border rounded w-16"
+              className={`w-14 rounded border border-rule bg-surface px-1.5 py-1 tabular-nums ${focusRing}`}
             />
           </label>
           {/* Direct user feedback (2026-09-17): the goal isn't maximizing
@@ -355,7 +396,7 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
             type="submit"
             name="strategy"
             value="MAX_FLYING"
-            className="border rounded px-2 py-0.5 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className={`rounded border border-rule px-2.5 py-1 text-ink hover:bg-flight-soft ${focusRing}`}
           >
             Max flying
           </button>
@@ -363,7 +404,7 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
             type="submit"
             name="strategy"
             value="MAX_DAYS_OFF"
-            className="border rounded px-2 py-0.5 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className={`rounded border border-rule px-2.5 py-1 text-ink hover:bg-flight-soft ${focusRing}`}
           >
             Max days off
           </button>
@@ -371,27 +412,17 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
             type="submit"
             name="strategy"
             value="MIX"
-            className="border rounded px-2 py-0.5 cursor-pointer bg-black text-white dark:bg-white dark:text-black hover:opacity-80"
+            className={`rounded bg-flight px-2.5 py-1 text-white hover:opacity-90 ${focusRing}`}
           >
             Generate roster
           </button>
         </form>
       </section>
 
-      <p className="text-xs text-zinc-400 mb-6">
-        {pairings.length} candidate pairing{pairings.length === 1 ? '' : 's'} generated
-        for this month (max {UI_PAIRING_CONSTRAINTS.maxTripDays} trip days,{' '}
-        {UI_PAIRING_CONSTRAINTS.minLayoverMinutes / 60}-{UI_PAIRING_CONSTRAINTS.maxLayoverMinutes / 60}h
-        layover window, same-fleet-type-per-pairing assumption — see
-        docs/pairing-assumptions.md).
-      </p>
-
       {hasNoScheduleData && (
-        <div className="rounded border border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-100 px-3 py-2 mb-4 text-sm">
-          No flight schedule data exists for this month &mdash; the seeded schedule does not
-          cover {year}-{String(month).padStart(2, '0')}. There is nothing to generate pairings
-          from or evaluate for compliance here; this is different from a covered month with
-          nothing assigned yet.
+        <div className="bg-surface border-l-[3px] border-amber rounded px-3 py-2 mb-4 text-sm text-ink">
+          No flight schedule for {year}-{String(month).padStart(2, '0')} — nothing to generate
+          pairings from or check for compliance here yet.
         </div>
       )}
 
@@ -404,19 +435,19 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
         weekday header row — which only makes sense as column labels — is
         hidden entirely below `md`.
       */}
-      <div className="hidden md:grid md:grid-cols-7 gap-2 mb-2">
+      <div className="hidden md:grid md:grid-cols-7 mb-1">
         {WEEKDAY_HEADERS.map((label) => (
-          <div key={label} className="text-xs font-medium text-zinc-500 text-center">
+          <div key={label} className="text-xs font-medium text-muted text-center py-1">
             {label}
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-7 gap-2 mb-6">
+      <div className="flex flex-col gap-3 md:grid md:grid-cols-7 md:gap-px md:rounded-lg md:border md:border-rule md:bg-rule md:overflow-hidden mb-2">
         {Array.from({ length: firstWeekdayIndex }).map((_, i) => (
           // Week-alignment padding only means anything in the 7-column
           // desktop grid; the mobile agenda list has no columns to align.
-          <div key={`pad-${i}`} className="hidden md:block" />
+          <div key={`pad-${i}`} className="hidden md:block md:bg-surface" />
         ))}
         {cells.map((cell) => (
           <DayCard
@@ -435,7 +466,19 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
             isToday={isCurrentMonth && cell.date === todayIso}
           />
         ))}
+        {Array.from({ length: (7 - ((firstWeekdayIndex + cells.length) % 7)) % 7 }).map((_, i) => (
+          // Trailing padding completes the last week so the grid's rule-colored
+          // background never shows through as an empty grey cell.
+          <div key={`tail-${i}`} className="hidden md:block md:bg-surface" />
+        ))}
       </div>
+
+      <p className="text-muted text-[11px] mb-6">
+        {pairings.length} candidate pairing{pairings.length === 1 ? '' : 's'} this month (trips up
+        to {UI_PAIRING_CONSTRAINTS.maxTripDays} days,{' '}
+        {UI_PAIRING_CONSTRAINTS.minLayoverMinutes / 60}–
+        {UI_PAIRING_CONSTRAINTS.maxLayoverMinutes / 60}h layovers).
+      </p>
 
       <CompliancePanel evaluations={complianceEvaluations} />
     </main>

@@ -36,10 +36,16 @@ interface CompliancePanelProps {
   evaluations: DatedRuleEvaluation[];
 }
 
-const SEVERITY_STYLES: Record<Severity, string> = {
-  RED: 'bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100',
-  AMBER: 'bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100',
-  GREEN: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100',
+const SEVERITY_DOT: Record<Severity, string> = {
+  RED: 'bg-red',
+  AMBER: 'bg-amber',
+  GREEN: 'bg-ok',
+};
+
+const SEVERITY_BORDER: Record<Severity, string> = {
+  RED: 'border-red',
+  AMBER: 'border-amber',
+  GREEN: 'border-ok',
 };
 
 function formatMargin(marginMinutes: number | undefined): string | null {
@@ -49,6 +55,22 @@ function formatMargin(marginMinutes: number | undefined): string | null {
   const hours = Math.floor(abs / 60);
   const minutes = abs % 60;
   return `margin ${sign}${hours}h${minutes}m`;
+}
+
+/** e.g. "Thu 1 Oct" — matches this app's UTC-day convention throughout. */
+function formatDisplayDate(date: string): string {
+  return new Date(`${date}T00:00:00.000Z`).toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
+}
+
+function worstSeverityOf(evaluations: RuleEvaluation[]): Severity {
+  if (evaluations.some((e) => e.severity === 'RED')) return 'RED';
+  if (evaluations.some((e) => e.severity === 'AMBER')) return 'AMBER';
+  return 'GREEN';
 }
 
 function EvaluationRow({
@@ -69,19 +91,21 @@ function EvaluationRow({
   const margin = formatMargin(evaluation.marginMinutes);
 
   return (
-    <li className={`rounded px-2 py-1 ${SEVERITY_STYLES[evaluation.severity]}`}>
-      <div className="font-semibold flex flex-wrap items-center gap-1">
-        <span>{evaluation.severity}</span>
-        <span>&mdash;</span>
-        <span>{evaluation.citation.clause}</span>
+    <li className={`pl-2 py-1 border-l-[3px] ${SEVERITY_BORDER[evaluation.severity]}`}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span
+          className={`inline-block w-1.5 h-1.5 rounded-full ${SEVERITY_DOT[evaluation.severity]}`}
+          aria-hidden="true"
+        />
+        <span className="font-semibold text-muted">{evaluation.citation.clause}</span>
         {evaluation.isOperatorSpecific && (
-          <span className="rounded bg-purple-200 text-purple-900 dark:bg-purple-800 dark:text-purple-100 px-1 py-0.5 text-[10px] font-normal">
-            operator-specific &mdash; not verifiable against public GCAA text
+          <span className="rounded bg-flight-soft text-ink px-1 py-0.5 text-[10px] font-normal">
+            Operator-specific — not verifiable against public GCAA text
           </span>
         )}
       </div>
-      <div>{evaluation.message}</div>
-      {margin && <div className="text-[10px] opacity-75">{margin}</div>}
+      <div className="text-ink">{evaluation.message}</div>
+      {margin && <div className="text-muted text-[10px] tabular-nums">{margin}</div>}
       {children}
     </li>
   );
@@ -98,45 +122,73 @@ export default function CompliancePanel({ evaluations }: CompliancePanelProps) {
   const grouped = groupNonOperatorSpecificEvaluationsByDate(evaluations);
   const operatorSpecificGroups = groupOperatorSpecificFindings(evaluations);
 
-  return (
-    <section className="border rounded p-3 mb-6 text-xs">
-      <h2 className="text-sm font-semibold mb-2">GCAA compliance &mdash; current roster</h2>
-      <p className="text-zinc-500 mb-2">
-        Itemized re-evaluation of whatever is actually assigned for this month right now (manual
-        or generated) &mdash; always current, unlike the one-time generation summary above. See
-        docs/roster-gen-assumptions.md item 10.
-      </p>
+  const worstByDate = grouped.map((day) => worstSeverityOf(day.evaluations));
+  const redCount = worstByDate.filter((s) => s === 'RED').length;
+  const amberCount = worstByDate.filter((s) => s === 'AMBER').length;
+  const dutyDayCount = grouped.length;
 
-      {grouped.length === 0 ? (
-        <p className="text-zinc-400">
-          No day-specific FTL findings for this month &mdash; nothing is assigned yet, or every
+  return (
+    <section className="bg-surface border border-rule rounded-lg p-3 mb-6 text-xs">
+      <h2 className="font-display text-sm font-semibold mb-1 text-ink">GCAA compliance</h2>
+
+      {dutyDayCount === 0 ? (
+        <p className="text-muted mb-2">
+          No day-specific FTL findings for this month — nothing is assigned yet, or every
           assigned duty is compliant against public GCAA data. See the operator-specific section
           below for findings that apply regardless of the specific day.
         </p>
+      ) : redCount === 0 && amberCount === 0 ? (
+        <p className="flex items-center gap-1.5 text-ok mb-2">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-ok" aria-hidden="true" />
+          {dutyDayCount} duty day{dutyDayCount === 1 ? '' : 's'} checked. All within limits.
+        </p>
       ) : (
+        <p className="mb-2">
+          {redCount > 0 && <span className="text-red font-medium">{redCount} illegal</span>}
+          {redCount > 0 && amberCount > 0 && <span className="text-muted">, </span>}
+          {amberCount > 0 && <span className="text-amber font-medium">{amberCount} to check</span>}
+          <span className="text-muted"> across {dutyDayCount} duty day{dutyDayCount === 1 ? '' : 's'}.</span>
+        </p>
+      )}
+
+      {grouped.length > 0 && (
         <ul className="flex flex-col gap-2">
-          {grouped.map((day) => (
-            <li key={day.date} id={day.date}>
-              <div className="font-medium mb-1">{day.date}</div>
-              <ul className="flex flex-col gap-1">
-                {day.evaluations.map((evaluation) => (
-                  <EvaluationRow
-                    key={`${day.date}-${evaluation.citation.ruleId}`}
-                    evaluation={evaluation}
-                  />
-                ))}
-              </ul>
-            </li>
-          ))}
+          {grouped.map((day) => {
+            const worst = worstSeverityOf(day.evaluations);
+            return (
+              <li key={day.date}>
+                <details id={day.date} open={worst !== 'GREEN'}>
+                  <summary className="cursor-pointer select-none flex items-center gap-1.5 font-medium text-ink py-0.5">
+                    <span
+                      className={`inline-block w-1.5 h-1.5 rounded-full ${SEVERITY_DOT[worst]}`}
+                      aria-hidden="true"
+                    />
+                    <span>{formatDisplayDate(day.date)}</span>
+                    <span className="text-muted font-normal">
+                      {day.evaluations.length} check{day.evaluations.length === 1 ? '' : 's'}
+                    </span>
+                  </summary>
+                  <ul className="flex flex-col gap-1 mt-1">
+                    {day.evaluations.map((evaluation) => (
+                      <EvaluationRow
+                        key={`${day.date}-${evaluation.citation.ruleId}`}
+                        evaluation={evaluation}
+                      />
+                    ))}
+                  </ul>
+                </details>
+              </li>
+            );
+          })}
         </ul>
       )}
 
       {operatorSpecificGroups.length > 0 && (
-        <div className="mt-4 pt-3 border-t">
-          <h3 className="text-sm font-semibold mb-1">
-            Operator-specific &mdash; not verifiable against public GCAA text
-          </h3>
-          <p className="text-zinc-500 mb-2">
+        <details className="mt-4 pt-3 border-t border-rule">
+          <summary className="cursor-pointer select-none font-display text-sm font-semibold text-ink">
+            Operator-specific checks ({operatorSpecificGroups.length})
+          </summary>
+          <p className="text-muted mt-2 mb-2">
             These checks need Emirates-internal figures this app does not have access to (see
             src/ftl/rules/operatorSpecific.ts). They apply the same way to every day listed below,
             so each distinct finding is shown once here rather than repeated per day.
@@ -148,15 +200,15 @@ export default function CompliancePanel({ evaluations }: CompliancePanelProps) {
                 evaluation={group.evaluation}
               >
                 <details className="mt-0.5">
-                  <summary className="cursor-pointer select-none text-zinc-500 dark:text-zinc-400 underline text-[10px]">
-                    applies to {group.dates.length} day{group.dates.length === 1 ? '' : 's'}
+                  <summary className="cursor-pointer select-none text-muted underline text-[10px]">
+                    Applies to {group.dates.length} day{group.dates.length === 1 ? '' : 's'}
                   </summary>
-                  <div className="mt-0.5 text-[10px] opacity-75">{group.dates.join(', ')}</div>
+                  <div className="mt-0.5 text-[10px] text-muted">{group.dates.join(', ')}</div>
                 </details>
               </EvaluationRow>
             ))}
           </ul>
-        </div>
+        </details>
       )}
     </section>
   );
