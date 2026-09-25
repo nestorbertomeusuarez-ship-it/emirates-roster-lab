@@ -16,18 +16,17 @@ import { EMIRATES_OPERATOR_CONFIG } from '../../ftl/operatorConfig';
 import { generateMonthlyRoster } from '../generateMonthlyRoster';
 import { loadRosterGenDaysForMonth } from './loadRosterGenDays';
 import type { GenerationStrategy, MonthlyRosterGenerationResult, RosterGenDay } from '../types';
+import { DEFAULT_PAIRING_CONSTRAINTS } from '../../pairing/constraints';
 
 /**
  * Pairing-search constraints used to build the candidate pool for
- * auto-generation. Mirrors the manual constructor's own
- * `UI_PAIRING_CONSTRAINTS` (src/app/roster/[year]/[month]/page.tsx) — not
- * user-configurable yet, same scope note as that module.
+ * auto-generation. Single source of truth is now
+ * `src/pairing/constraints.ts#DEFAULT_PAIRING_CONSTRAINTS`
+ * (docs/pairing-assumptions.md item 10) — this alias is kept only for
+ * backward compatibility with any external caller that imported the old
+ * name directly; not user-configurable yet, same scope note as before.
  */
-export const ROSTER_GEN_PAIRING_CONSTRAINTS = {
-  maxTripDays: 4,
-  minLayoverMinutes: 8 * 60,
-  maxLayoverMinutes: 48 * 60,
-};
+export const ROSTER_GEN_PAIRING_CONSTRAINTS = DEFAULT_PAIRING_CONSTRAINTS;
 
 function previousMonthOf(year: number, month: number): { year: number; month: number } {
   return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };

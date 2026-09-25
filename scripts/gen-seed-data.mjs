@@ -179,29 +179,29 @@ const REAL_STD_NOTE =
 // adding real signal for this tool.
 // ---------------------------------------------------------------------------
 const A350_ROUTES = [
-  { iata: 'BAH', blockOut: 60, conf: 'ADVERTISED', note: 'user-supplied high-frequency route (multiple daily departures in reality e.g. ~3x/day); modeled here as one representative daily line' },
-  { iata: 'KWI', blockOut: 90, conf: 'ADVERTISED', stdOutLocal: '01:25', stdRetLocal: '03:40', note: REAL_STD_NOTE },
-  { iata: 'JED', blockOut: 140, conf: 'ADVERTISED', note: 'block time is a reasonable estimate, not a sourced fact; now a confirmed multi-type route — see the new CONFIRMED A380 JED row below, added per the user-supplied 2026-09-15 authoritative A380 destination list' },
-  { iata: 'RUH', blockOut: 140, conf: 'ADVERTISED', note: 'block time is a reasonable estimate, not a sourced fact' },
-  { iata: 'DMM', blockOut: 85, conf: 'ADVERTISED' },
-  { iata: 'MCT', blockOut: 75, conf: 'ADVERTISED' },
-  { iata: 'AMM', blockOut: 205, conf: 'ADVERTISED', note: 'known multi-type route — A350/777/A380 all reported operating different AMM frequencies through 2026, do not treat as pure A350; corroborated by the user-supplied 2026-09-15 authoritative A380 destination list, which lists Amman as an active A380 destination — see the new CONFIRMED A380 AMM row below' },
-  { iata: 'BGW', blockOut: 115, conf: 'CONFIRMED', note: 'history: mixed A350/other fleet through 2025, research found this route resolved to all-A350 from 1 Jan 2026 — current confidence reflects the post-2026-01-01 state' },
+  { iata: 'BAH', turnaround: true, blockOut: 60, conf: 'ADVERTISED', note: 'user-supplied high-frequency route (multiple daily departures in reality e.g. ~3x/day); modeled here as one representative daily line' },
+  { iata: 'KWI', turnaround: true, blockOut: 90, conf: 'ADVERTISED', stdOutLocal: '01:25', stdRetLocal: '03:40', note: REAL_STD_NOTE },
+  { iata: 'JED', turnaround: true, blockOut: 140, conf: 'ADVERTISED', note: 'block time is a reasonable estimate, not a sourced fact; now a confirmed multi-type route — see the new CONFIRMED A380 JED row below, added per the user-supplied 2026-09-15 authoritative A380 destination list' },
+  { iata: 'RUH', turnaround: true, blockOut: 140, conf: 'ADVERTISED', note: 'block time is a reasonable estimate, not a sourced fact' },
+  { iata: 'DMM', turnaround: true, blockOut: 85, conf: 'ADVERTISED' },
+  { iata: 'MCT', turnaround: true, blockOut: 75, conf: 'ADVERTISED' },
+  { iata: 'AMM', turnaround: true, blockOut: 205, conf: 'ADVERTISED', note: 'known multi-type route — A350/777/A380 all reported operating different AMM frequencies through 2026, do not treat as pure A350; corroborated by the user-supplied 2026-09-15 authoritative A380 destination list, which lists Amman as an active A380 destination — see the new CONFIRMED A380 AMM row below' },
+  { iata: 'BGW', turnaround: true, blockOut: 115, conf: 'CONFIRMED', note: 'history: mixed A350/other fleet through 2025, research found this route resolved to all-A350 from 1 Jan 2026 — current confidence reflects the post-2026-01-01 state' },
   { iata: 'EDI', blockOut: 435, conf: 'CONFIRMED', stdOutLocal: '14:50', stdRetLocal: '20:55', note: `launch route — exact published times found; ${REAL_STD_NOTE}` },
   { iata: 'LYS', blockOut: 405, conf: 'ADVERTISED' },
   { iata: 'BLQ', blockOut: 350, conf: 'ADVERTISED' },
   { iata: 'IST', blockOut: 270, conf: 'ADVERTISED' },
   { iata: 'OSL', blockOut: 410, conf: 'CONFIRMED', stdOutLocal: '07:30', stdRetLocal: '14:35', note: `Emirates press release confirmed 1 Sept 2026 debut; ${REAL_STD_NOTE}` },
-  { iata: 'BOM', blockOut: 195, conf: 'ADVERTISED', note: 'high-frequency/multi-type route — also served by A380 and other widebodies on different frequencies; not every BOM flight is A350' },
-  { iata: 'DEL', blockOut: 200, conf: 'ADVERTISED', note: 'block time is a reasonable estimate, not a sourced fact' },
+  { iata: 'BOM', turnaround: true, blockOut: 195, conf: 'ADVERTISED', note: 'high-frequency/multi-type route — also served by A380 and other widebodies on different frequencies; not every BOM flight is A350' },
+  { iata: 'DEL', turnaround: true, blockOut: 200, conf: 'ADVERTISED', note: 'block time is a reasonable estimate, not a sourced fact' },
   { iata: 'CMB', blockOut: 245, conf: 'ADVERTISED', stdOutLocal: '16:10', stdRetLocal: '02:55', note: REAL_STD_NOTE },
-  { iata: 'ISB', blockOut: 190, conf: 'ADVERTISED', note: 'block time is a reasonable estimate, not a sourced fact' },
+  { iata: 'ISB', turnaround: true, blockOut: 190, conf: 'ADVERTISED', note: 'block time is a reasonable estimate, not a sourced fact' },
   { iata: 'CGK', blockOut: 510, conf: 'ADVERTISED', note: 'block time is a reasonable estimate, not a sourced fact' },
   { iata: 'ADL', blockOut: 705, conf: 'CONFIRMED', stdOutLocal: '02:00', stdRetLocal: '22:35', note: `daily from Dec 2025; ${REAL_STD_NOTE}` },
   { iata: 'SGN', blockOut: 255, conf: 'CONFIRMED', note: 'launched Aug 2025' },
   { iata: 'BNE', blockOut: 840, conf: 'UNKNOWN', note: 'CONFLICT — LIKELY RESOLVED IN FAVOR OF A380, 2026-09-15: original independent research found BNE listed as a "Medium confidence" A380 route with no A350 corroboration; the user\'s later 2026-09-15 authoritative A380 destination list explicitly confirms Brisbane as an A380 destination and does NOT include it as A350. Confidence lowered from ADVERTISED to UNKNOWN pending correction — this row is kept for history, not as the currently best-supported claim. See the new CONFIRMED A380 BNE row below, which supersedes this one. Block time is an estimate.' },
   { iata: 'KIX', blockOut: 590, conf: 'ADVERTISED', note: 'CONFLICT: user-supplied list places this under A350; independent research this session found KIX historically operated as A380, with an uncertain current state after a temporary May-2026 swap to 777 — needs user verification. Same airport as the A380 KIX row below; both rows are intentionally kept.' },
-  { iata: 'AMD', blockOut: 165, conf: 'ADVERTISED', stdOutLocal: '22:50', stdRetLocal: '09:50', note: REAL_STD_NOTE },
+  { iata: 'AMD', turnaround: true, blockOut: 165, conf: 'ADVERTISED', stdOutLocal: '22:50', stdRetLocal: '09:50', note: REAL_STD_NOTE },
   { iata: 'YUL', blockOut: 730, conf: 'CONFIRMED', note: 'daily from 11 Jan 2026' },
   { iata: 'LGW', blockOut: 440, conf: 'CONFIRMED', note: 'from 8 Feb 2026; now a confirmed multi-type route — see the new CONFIRMED A380 LGW row below, added per the user-supplied 2026-09-15 authoritative A380 destination list' },
   { iata: 'FCO', blockOut: 365, conf: 'CONFIRMED', note: 'from 29 Mar 2026; now a confirmed multi-type route — see the new CONFIRMED A380 FCO row below, added per the user-supplied 2026-09-15 authoritative A380 destination list' },
@@ -241,12 +241,12 @@ const A380_ROUTES = [
   { iata: 'AKL', blockOut: 1035, conf: 'CONFIRMED', note: `world's longest A380 route; daily from June 2026; reconfirmed by ${CONFIRM_2026_09_15}` },
   { iata: 'MEL', blockOut: 815, conf: 'CONFIRMED', stdOutLocal: '03:00', stdRetLocal: '21:15', note: `reconfirmed by ${CONFIRM_2026_09_15}. ${REAL_STD_NOTE}` },
   { iata: 'PER', blockOut: 660, conf: 'CONFIRMED', stdOutLocal: '02:45', stdRetLocal: '22:20', note: `reconfirmed by ${CONFIRM_2026_09_15}. ${REAL_STD_NOTE}` },
-  { iata: 'BOM', blockOut: 195, conf: 'CONFIRMED', note: `multi-type route — also in the A350 list above; that is expected/correct, real airlines run multiple types on a high-frequency route; reconfirmed by ${CONFIRM_2026_09_15}`, numOffset: 1 },
+  { iata: 'BOM', turnaround: true, blockOut: 195, conf: 'CONFIRMED', note: `multi-type route — also in the A350 list above; that is expected/correct, real airlines run multiple types on a high-frequency route; reconfirmed by ${CONFIRM_2026_09_15}`, numOffset: 1 },
   { iata: 'SIN', blockOut: 435, blockRet: 465, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
   { iata: 'BKK', blockOut: 395, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
   { iata: 'HKG', blockOut: 450, conf: 'CONFIRMED', note: `reconfirmed by ${CONFIRM_2026_09_15}` },
   { iata: 'JNB', blockOut: 495, conf: 'CONFIRMED', stdOutLocal: '04:05', stdRetLocal: '13:40', note: `reconfirmed by ${CONFIRM_2026_09_15}. ${REAL_STD_NOTE}` },
-  { iata: 'CAI', blockOut: 200, conf: 'CONFIRMED', stdOutLocal: '20:55', stdRetLocal: '00:50', note: `reconfirmed by ${CONFIRM_2026_09_15}. ${REAL_STD_NOTE} Source flagged these flight numbers as possibly SkyCargo-tagged in some trackers; times are still consistent with the passenger schedule.` },
+  { iata: 'CAI', turnaround: true, blockOut: 200, conf: 'CONFIRMED', stdOutLocal: '20:55', stdRetLocal: '00:50', note: `reconfirmed by ${CONFIRM_2026_09_15}. ${REAL_STD_NOTE} Source flagged these flight numbers as possibly SkyCargo-tagged in some trackers; times are still consistent with the passenger schedule.` },
 
   // --- Not in the 2026-09-15 list: left untouched, still volatile/unconfirmed ---
   { iata: 'CPH', blockOut: 395, conf: 'ADVERTISED', stdOutLocal: '08:20', stdRetLocal: '15:15', note: `VOLATILITY: same route as the A350 CPH row above, kept simultaneously — CPH is still transitioning from A380 to A350/777 through late 2026, do not treat as settled. Not present on the 2026-09-15 A380 destination list, so left unconfirmed. ${REAL_STD_NOTE} (this real time does not resolve the aircraft-type volatility above — conf intentionally left ADVERTISED)`, numOffset: 1 },
@@ -261,8 +261,8 @@ const A380_ROUTES = [
   // also confirmed as A380 by the 2026-09-15 list (same pattern as the
   // pre-existing BOM/CPH dual rows) ---
   { iata: 'TPE', blockOut: 530, conf: 'CONFIRMED', note: `multi-type route — also served by A350 (see A350 TPE row, launched 1 May 2026); a route can carry both an A350 and an A380 frequency, same pattern as BOM. Added per the ${CONFIRM_2026_09_15}`, sourceBase: CONFIRM_2026_09_15 },
-  { iata: 'AMM', blockOut: 205, conf: 'CONFIRMED', note: `multi-type route — A350/777/A380 all reported operating different AMM frequencies through 2026 (see A350 AMM row above). Added per the ${CONFIRM_2026_09_15}`, sourceBase: CONFIRM_2026_09_15 },
-  { iata: 'JED', blockOut: 140, conf: 'CONFIRMED', note: `multi-type route — also served by A350 (see A350 JED row above), same multi-type pattern as BOM/TPE. Added per the ${CONFIRM_2026_09_15}`, sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'AMM', turnaround: true, blockOut: 205, conf: 'CONFIRMED', note: `multi-type route — A350/777/A380 all reported operating different AMM frequencies through 2026 (see A350 AMM row above). Added per the ${CONFIRM_2026_09_15}`, sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'JED', turnaround: true, blockOut: 140, conf: 'CONFIRMED', note: `multi-type route — also served by A350 (see A350 JED row above), same multi-type pattern as BOM/TPE. Added per the ${CONFIRM_2026_09_15}`, sourceBase: CONFIRM_2026_09_15 },
   { iata: 'LGW', blockOut: 440, conf: 'CONFIRMED', note: `multi-type route — also served by A350 (see A350 LGW row above, CONFIRMED from 8 Feb 2026). Added per the ${CONFIRM_2026_09_15}`, sourceBase: CONFIRM_2026_09_15 },
   { iata: 'FCO', blockOut: 365, conf: 'CONFIRMED', note: `multi-type route — also served by A350 (see A350 FCO row above, CONFIRMED from 29 Mar 2026). Added per the ${CONFIRM_2026_09_15}`, sourceBase: CONFIRM_2026_09_15 },
   { iata: 'KUL', blockOut: 440, conf: 'CONFIRMED', stdOutLocal: '03:40', stdRetLocal: '02:00', note: `multi-type route — also served by A350 (see A350 KUL row above, "same pattern as CPT/AMM"). Added per the ${CONFIRM_2026_09_15}. ${REAL_STD_NOTE}`, sourceBase: CONFIRM_2026_09_15 },
@@ -285,7 +285,7 @@ const A380_ROUTES = [
   { iata: 'VIE', blockOut: 345, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
   { iata: 'ZRH', blockOut: 370, conf: 'CONFIRMED', stdOutLocal: '15:00', stdRetLocal: '22:00', note: REAL_STD_NOTE, sourceBase: CONFIRM_2026_09_15 },
   { iata: 'DPS', blockOut: 500, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
-  { iata: 'BLR', blockOut: 210, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
+  { iata: 'BLR', turnaround: true, blockOut: 210, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
   { iata: 'CHC', blockOut: 930, conf: 'CONFIRMED', note: 'modeled as one representative direct daily line per this generator\'s existing convention (see the file-header judgment-call note); in reality Emirates routes CHC via SYD/AKL rather than nonstop from DXB', sourceBase: CONFIRM_2026_09_15 },
   { iata: 'ICN', blockOut: 570, conf: 'CONFIRMED', sourceBase: CONFIRM_2026_09_15 },
   { iata: 'PVG', blockOut: 520, conf: 'CONFIRMED', stdOutLocal: '02:50', stdRetLocal: '00:05', note: REAL_STD_NOTE, sourceBase: CONFIRM_2026_09_15 },
@@ -307,6 +307,56 @@ function stdForRoute(iata, seedOffset) {
   let hash = seedOffset;
   for (const ch of iata) hash = (hash * 31 + ch.charCodeAt(0)) % 1439;
   return hash;
+}
+
+// ---------------------------------------------------------------------------
+// Turnaround routes (docs/pairing-assumptions.md item 10 + docs/data-
+// sources.md's 2026-09-24 entry): a route flagged `turnaround: true` is a
+// real-world same-day out-and-back — the crew never leaves the aircraft/
+// airport for a proper overnight rest, ~1-2h ground time, one FDP with 2
+// sectors — rather than this generator's previous default of modeling every
+// destination as a multi-day layover. `DEFAULT_TURNAROUND_GROUND_MIN` (75)
+// matches `src/pairing/constraints.ts#DEFAULT_PAIRING_CONSTRAINTS`'s own
+// [45,150]min turnaround window's midpoint-ish value — not itself a sourced
+// real-world ground time for any specific route, same footing as this
+// file's other synthetic-but-internally-consistent conventions.
+// ---------------------------------------------------------------------------
+const DEFAULT_TURNAROUND_GROUND_MIN = 75;
+
+/**
+ * Ground time, in minutes, from an outbound leg's arrival to the NEXT daily
+ * occurrence of a return leg departing at `retStdUTCMin` — both legs recur
+ * DAILY (see `expandScheduleToInstances.ts`: `daysOfWeek` evaluated per UTC
+ * calendar day, `depUTC`/`arrUTC` computed fresh from that day's own
+ * midnight + minute-of-day), so the correct ground time is the minimal
+ * non-negative offset from the outbound's arrival-of-day to the return's
+ * next recurrence, handling the UTC-midnight rollover via `% 1440` — the
+ * exact same reasoning `src/roster-gen/generateMonthlyRoster.ts`'s pairing
+ * engine relies on (a daily-recurring instance always exists on whichever
+ * calendar day its absolute timestamp actually falls on, regardless of
+ * which day's `daysOfWeek` pattern nominally "produced" it).
+ */
+function turnaroundGroundMinutes(outStdUTCMin, outBlockMin, retStdUTCMin) {
+  const arrUTCMinOfDay = (outStdUTCMin + outBlockMin) % 1440;
+  return ((retStdUTCMin - arrUTCMinOfDay) % 1440 + 1440) % 1440;
+}
+
+/**
+ * Logs (never throws — this is an observability aid for human review, not a
+ * validation gate) whether a turnaround-flagged route's actual computed
+ * ground time falls inside the `[45,150]`min turnaround window. Every
+ * derived (no real `stdRetLocal`) route always logs exactly
+ * `turnGroundMin`/`DEFAULT_TURNAROUND_GROUND_MIN` and is therefore always
+ * inside the window by construction; a route WITH a real `stdRetLocal` (its
+ * STD is never touched by this script, see the module doc comment) may or
+ * may not land inside it — this is exactly the case the user asked to be
+ * able to review.
+ */
+function logTurnaroundGroundTime(iata, groundMin) {
+  const inWindow = groundMin >= 45 && groundMin <= 150;
+  console.log(
+    `[turnaround] ${iata}: ${groundMin}min ground${inWindow ? '' : ' — OUTSIDE the 45-150min turnaround window, kept as-is per real published times, see docs/data-sources.md'}`
+  );
 }
 
 function buildLeg(number, depIata, arrIata, stdUTCMin, blockMin, advertisedType, confidence, sourceRef) {
@@ -368,7 +418,13 @@ for (const route of A350_ROUTES) {
     : stdForRoute(route.iata, 350);
   const stdRet = route.stdRetLocal
     ? localHHMMToUTCMinutes(route.stdRetLocal, tzOf(route.iata))
-    : stdForRoute(route.iata, 351);
+    : route.turnaround
+      ? (stdOut + blockOut + (route.turnGroundMin ?? DEFAULT_TURNAROUND_GROUND_MIN)) % 1440
+      : stdForRoute(route.iata, 351);
+
+  if (route.turnaround) {
+    logTurnaroundGroundTime(route.iata, turnaroundGroundMinutes(stdOut, blockOut, stdRet));
+  }
 
   records.push(
     buildLeg(`EK${num}`, 'DXB', route.iata, stdOut, blockOut, 'A350', route.conf, sourceRef)
@@ -392,7 +448,13 @@ for (const route of A380_ROUTES) {
     : stdForRoute(route.iata, 480);
   const stdRet = route.stdRetLocal
     ? localHHMMToUTCMinutes(route.stdRetLocal, tzOf(route.iata))
-    : stdForRoute(route.iata, 481);
+    : route.turnaround
+      ? (stdOut + blockOut + (route.turnGroundMin ?? DEFAULT_TURNAROUND_GROUND_MIN)) % 1440
+      : stdForRoute(route.iata, 481);
+
+  if (route.turnaround) {
+    logTurnaroundGroundTime(route.iata, turnaroundGroundMinutes(stdOut, blockOut, stdRet));
+  }
 
   records.push(
     buildLeg(`EK${flightNum}`, 'DXB', route.iata, stdOut, blockOut, 'A380', route.conf, sourceRef)

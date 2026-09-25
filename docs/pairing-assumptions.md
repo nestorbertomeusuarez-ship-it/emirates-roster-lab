@@ -148,3 +148,40 @@ live Oct 2026 schedule: still 0 RED both fleets, block hours essentially
 unchanged (the construction loop transparently substituted a few
 candidates that were only marginal under the old, less realistic rest
 definition).
+
+## 10. Turnaround ground-time window, distinct from an overnight layover
+
+Direct user feedback (an actual line pilot, 2026-09-24): several destinations
+this tool modeled as 2-3 day layovers (e.g. MCT, KWI, BAH) are, in real
+Emirates operations, same-day TURNAROUNDS — the crew never leaves the
+aircraft/airport, ~1-2h ground time, one FDP with 2 sectors, back at DXB the
+same day. `src/pairing/generatePairings.ts` previously applied a single
+`[minLayoverMinutes, maxLayoverMinutes]` window to EVERY connection, so a
+short ground time (well under the 8h layover minimum) could never chain into
+a pairing at all.
+
+`PairingSearchConstraints` gained optional `turnaroundMinMinutes`/
+`turnaroundMaxMinutes` (`src/pairing/types.ts`). A connection is now accepted
+when its ground time falls in EITHER window — turnaround OR layover — never
+a replacement for the layover window, and never accepted in the dead zone
+between them (e.g. 151-479 minutes with the default bounds below). Both
+fields absent reproduces the pre-item-10 single-window behavior exactly
+(`generatePairings.ts#isAcceptableGroundTime`).
+
+The three previously-duplicated constraint object literals
+(`UI_PAIRING_CONSTRAINTS` in both `page.tsx` and `actions.ts`,
+`ROSTER_GEN_PAIRING_CONSTRAINTS` in `rosterGen.ts`) are now ONE constant,
+`src/pairing/constraints.ts#DEFAULT_PAIRING_CONSTRAINTS`:
+`{ maxTripDays: 4, turnaroundMinMinutes: 45, turnaroundMaxMinutes: 150,
+minLayoverMinutes: 480, maxLayoverMinutes: 2880 }`. `45`/`150` minutes is an
+industry-standard-ish quick-turn window (not sourced from a specific
+Emirates OM-A extract) — same footing as this file's other unsourced
+scheduling-heuristic constants (see item 3's own framing).
+
+This directly un-blocks the LCA-MLA tag-on limitation noted in
+`docs/data-sources.md`'s 2026-09-23 entry ("a ~1h tag-on turnaround at LCA
+can never chain") for the general turnaround case, though the specific
+LCA-MLA multi-city tag-on itself remains modeled as two independent DXB
+nonstops (deferred, unchanged by this item) — see `docs/data-sources.md`'s
+2026-09-24 entry for which seed routes were actually switched to turnaround
+scheduling and why LCA itself was deliberately excluded.

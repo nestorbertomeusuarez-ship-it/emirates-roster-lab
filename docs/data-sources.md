@@ -326,3 +326,79 @@ surfaced, deliberately NOT auto-applied"). Evidence is web-search based
   in October 2026 at all. Low confidence; same tag-on engine limitation as
   LCA/MLA. The fictional DXB-CHC nonstop row is kept as-is with its
   existing judgment-call note.
+
+## 2026-09-24 turnaround-route seed regeneration
+
+Direct user feedback (an actual line pilot): several short-haul DXB
+destinations were unrealistically modeled as multi-day layovers rather than
+same-day turnarounds. Following the new turnaround ground-time window
+(docs/pairing-assumptions.md item 10), `scripts/gen-seed-data.mjs` now flags
+`turnaround: true` on every route with a block time <= 210min: **BAH, KWI,
+JED, RUH, DMM, MCT, AMM, BGW, BOM, DEL, ISB, AMD, CAI, BLR** (JED/AMM/BOM
+flagged on both their A350 and A380 rows).
+
+Two deliberate deviations from a strict "block <= 210min" reading, both
+`turnaround: true` was NOT applied:
+
+- **LCA excluded** despite its 210min A350 block. `docs/data-sources.md`'s
+  2026-09-23 entry already documents the DXB-LCA-MLA real-world tag-on
+  rotation as its own deferred feature ("Deferred as its own feature by
+  user decision") — flagging the plain DXB-LCA nonstop as a turnaround here
+  would silently pre-empt that separate decision. Left as an ordinary
+  layover-shaped connection (still 8h+ ground either way — see
+  `seedSchedule.test.ts`'s own assertion for this route).
+- **BLR included** despite not appearing on the task's own suggested route
+  list — it independently qualifies (A380, 210min block) and there is no
+  competing feature it would conflict with, so it was added rather than
+  silently dropped for not matching the suggested list verbatim.
+
+For every flagged route WITHOUT a real researched `stdOutLocal`/
+`stdRetLocal` pair (12 of 14: BAH, JED, RUH, DMM, MCT, AMM, BGW, BOM, DEL,
+ISB, CAI, BLR), the return leg's synthetic STD is now DERIVED as
+`(outbound STD + outbound block + 75min) mod 1440` instead of the old
+unrelated pseudo-random hash — a real 75min quick-turn ground time, handling
+UTC-midnight rollover via the modulo (both legs recur daily, see
+`src/pairing/expandScheduleToInstances.ts`).
+
+**KWI and AMD keep their real 2026-09-19-researched `stdOutLocal`/
+`stdRetLocal` untouched**, per this item's own scope decision (a route with
+real published times is kept as-is, only documented, never overridden by a
+synthetic derivation). The generator now prints each turnaround route's
+actual computed ground time for human review:
+
+```
+[turnaround] BAH: 75min ground
+[turnaround] KWI: 105min ground
+[turnaround] JED: 75min ground
+[turnaround] RUH: 75min ground
+[turnaround] DMM: 75min ground
+[turnaround] MCT: 75min ground
+[turnaround] AMM: 75min ground
+[turnaround] BGW: 75min ground
+[turnaround] BOM: 75min ground
+[turnaround] DEL: 75min ground
+[turnaround] ISB: 75min ground
+[turnaround] AMD: 405min ground — OUTSIDE the 45-150min turnaround window, kept as-is per real published times, see docs/data-sources.md
+[turnaround] BOM: 75min ground
+[turnaround] CAI: 95min ground
+[turnaround] AMM: 75min ground
+[turnaround] JED: 75min ground
+[turnaround] BLR: 75min ground
+```
+
+**KWI's real times happen to land inside the turnaround window** (105min
+ground — a genuine real-world quick turn). **AMD's real times do NOT**
+(405min — neither a turnaround nor the ordinary 8h+ layover minimum; the
+existing pairing engine still connects it via the NEXT day's return
+occurrence, ~30h later, an ordinary overnight layover shape unaffected by
+this item). Both are documented, not forced, per this item's scope decision.
+
+Regenerating via `node scripts/gen-seed-data.mjs` changed 14 of the 15
+turnaround-flagged return-leg records' `stdUTCMin`/`staUTCMin` (one, by
+coincidence of the old pseudo-random hash, already landed inside the
+turnaround window and its bytes are unchanged); no route was added,
+removed, or reassigned between fleets. Guarded by
+`src/ingest/seedSchedule.test.ts`'s new `DXB seed schedule — turnaround
+routes` suite. The dev database was NOT reseeded by this change — see this
+task's own scope note; `prisma db seed` still needs to be run manually
+before the new turnaround schedule appears in any live roster generation.

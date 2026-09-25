@@ -121,4 +121,19 @@ export interface PairingSearchConstraints {
    * the supplied instances.
    */
   fleetTypes?: string[];
+  /**
+   * Optional same-day TURNAROUND ground-time window, in minutes
+   * (docs/pairing-assumptions.md item 10) — a short-haul out-and-back where
+   * the crew never leaves the aircraft/airport for a proper rest period
+   * (e.g. DXB-MCT-DXB with ~1-2h ground time), as distinct from a genuine
+   * overnight `[minLayoverMinutes, maxLayoverMinutes]` layover. A connection
+   * is accepted when its ground time falls in EITHER this window OR the
+   * existing layover window — never a replacement for it. Both fields must
+   * be supplied together (see `generatePairings`'s own validation); omitting
+   * both reproduces this interface's pre-existing behavior exactly (no
+   * turnaround connections are ever offered).
+   */
+  turnaroundMinMinutes?: number;
+  /** See `turnaroundMinMinutes`'s doc comment. */
+  turnaroundMaxMinutes?: number;
 }

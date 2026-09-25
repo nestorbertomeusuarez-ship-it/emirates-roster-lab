@@ -50,6 +50,8 @@ export type GenerationStrategy = 'MIX' | 'MAX_FLYING' | 'MAX_DAYS_OFF';
  *                          `forcedOffByWeeklyPacing`).
  *   STREAK_EXTENSION     — the natural-variation streak extension (docs
  *                          item 22, `forcedOffByStreakExtension`).
+ *   POST_LONG_HAUL_REST   — the mandatory home-rest day after a LONG-haul
+ *                          trip (docs item 31, `forcedOffByPostLongHaulRest`).
  *   NO_ELIGIBLE_CANDIDATE — none of the above forced it, but no legal/
  *                          budget-eligible candidate existed for the day
  *                          either.
@@ -63,7 +65,9 @@ export type OffReason =
   | 'CONSECUTIVE_CAP'
   | 'WEEKLY_PACING'
   | 'STREAK_EXTENSION'
-  | 'NO_ELIGIBLE_CANDIDATE';
+  | 'NO_ELIGIBLE_CANDIDATE'
+  | 'POST_LONG_HAUL_REST'
+  | 'PLANNED_BLOCK';
 
 /** One calendar day's automatically-generated assignment. */
 export type RosterGenDayAssignment =

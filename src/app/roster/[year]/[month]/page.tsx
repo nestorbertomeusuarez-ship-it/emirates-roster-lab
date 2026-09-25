@@ -22,6 +22,7 @@ import {
 import { generatePairingsForMonth } from '@/pairing/db/pairings';
 import { countFlightInstancesForMonth } from '@/pairing/db/flightInstances';
 import type { GeneratedPairing } from '@/pairing/types';
+import { DEFAULT_PAIRING_CONSTRAINTS } from '@/pairing/constraints';
 import { loadRosterGenDaysForMonth } from '@/roster-gen/db/loadRosterGenDays';
 import { evaluateRosterDays } from '@/roster-gen/generateMonthlyRoster';
 import type { OffReason } from '@/roster-gen/types';
@@ -35,12 +36,6 @@ import { buildFlightDaySummaryMap } from './flightDaySummary';
 import { buildMonthSummary } from './monthSummary';
 import { nextMonth, previousMonth, type YearMonth } from './adjacentMonth';
 import { hasNoScheduleDataForMonth } from './emptyScheduleData';
-
-const UI_PAIRING_CONSTRAINTS = {
-  maxTripDays: 4,
-  minLayoverMinutes: 8 * 60,
-  maxLayoverMinutes: 48 * 60,
-};
 
 const WEEKDAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -94,6 +89,9 @@ const OFF_REASON_KEYS: readonly OffReason[] = [
   'WEEKLY_PACING',
   'STREAK_EXTENSION',
   'NO_ELIGIBLE_CANDIDATE',
+  // Appended at the END (docs items 31/32) — see actions.ts's own comment.
+  'POST_LONG_HAUL_REST',
+  'PLANNED_BLOCK',
 ];
 
 const OFF_REASON_LABELS: Record<OffReason, string> = {
@@ -102,6 +100,8 @@ const OFF_REASON_LABELS: Record<OffReason, string> = {
   WEEKLY_PACING: 'weekly pacing',
   STREAK_EXTENSION: 'streak extension',
   NO_ELIGIBLE_CANDIDATE: 'no eligible candidate',
+  POST_LONG_HAUL_REST: 'post-long-haul home rest',
+  PLANNED_BLOCK: 'planned days-off block',
 };
 
 /** Skips zero counts — e.g. "3 weekly pacing, 2 month pacing, 1 no eligible candidate". */
@@ -193,7 +193,7 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
   // DXB days off) in the header, at a glance — see monthSummary.ts.
   const monthSummary = buildMonthSummary(cells, dayCategoryByDate, flightDaySummaryByDate);
 
-  const pairings = await generatePairingsForMonth(prisma, year, month, UI_PAIRING_CONSTRAINTS);
+  const pairings = await generatePairingsForMonth(prisma, year, month, DEFAULT_PAIRING_CONSTRAINTS);
   const candidatesByStartDate = new Map<string, GeneratedPairing[]>();
   for (const pairing of pairings) {
     const bucket = candidatesByStartDate.get(pairing.startServiceDate) ?? [];
@@ -475,9 +475,11 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
 
       <p className="text-muted text-[11px] mb-6">
         {pairings.length} candidate pairing{pairings.length === 1 ? '' : 's'} this month (trips up
-        to {UI_PAIRING_CONSTRAINTS.maxTripDays} days,{' '}
-        {UI_PAIRING_CONSTRAINTS.minLayoverMinutes / 60}–
-        {UI_PAIRING_CONSTRAINTS.maxLayoverMinutes / 60}h layovers).
+        to {DEFAULT_PAIRING_CONSTRAINTS.maxTripDays} days;{' '}
+        {DEFAULT_PAIRING_CONSTRAINTS.turnaroundMinMinutes}–
+        {DEFAULT_PAIRING_CONSTRAINTS.turnaroundMaxMinutes}min same-day turnarounds or{' '}
+        {DEFAULT_PAIRING_CONSTRAINTS.minLayoverMinutes / 60}–
+        {DEFAULT_PAIRING_CONSTRAINTS.maxLayoverMinutes / 60}h layovers).
       </p>
 
       <CompliancePanel evaluations={complianceEvaluations} />

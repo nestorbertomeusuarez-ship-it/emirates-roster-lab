@@ -215,3 +215,84 @@ describe('generatePairings — no candidates', () => {
     ).toThrow();
   });
 });
+
+describe('generatePairings — turnaround window (docs/pairing-assumptions.md item 10)', () => {
+  const turnaroundConstraints: PairingSearchConstraints = {
+    ...baseConstraints,
+    turnaroundMinMinutes: 45,
+    turnaroundMaxMinutes: 150,
+  };
+
+  it('forms a 2-leg single-day pairing for a DXB-MCT-DXB turnaround with 75min ground time', () => {
+    const out = instance({
+      depIata: 'DXB',
+      arrIata: 'MCT',
+      depUTC: '2026-02-01T06:00',
+      arrUTC: '2026-02-01T07:15',
+    });
+    const back = instance({
+      depIata: 'MCT',
+      arrIata: 'DXB',
+      depUTC: '2026-02-01T08:30', // 75min ground time — inside [45,150]
+      arrUTC: '2026-02-01T09:45',
+    });
+
+    const pairings = generatePairings([out, back], turnaroundConstraints);
+
+    expect(pairings).toHaveLength(1);
+    expect(pairings[0].legs).toHaveLength(2);
+    expect(pairings[0].legs[1].layoverMinutesBeforeThisLeg).toBe(75);
+    expect(pairings[0].tripDays).toBe(1);
+  });
+
+  it('rejects a connection whose ground time falls between the turnaround and layover windows', () => {
+    const out = instance({
+      depIata: 'DXB',
+      arrIata: 'MCT',
+      depUTC: '2026-02-01T06:00',
+      arrUTC: '2026-02-01T07:15',
+    });
+    const back = instance({
+      depIata: 'MCT',
+      arrIata: 'DXB',
+      depUTC: '2026-02-01T10:35', // 200min ground — above turnaround max, below layover min
+      arrUTC: '2026-02-01T11:45',
+    });
+
+    expect(generatePairings([out, back], turnaroundConstraints)).toHaveLength(0);
+  });
+
+  it('still accepts a connection within the ordinary layover window when the turnaround window is configured', () => {
+    const out = instance({
+      depIata: 'DXB',
+      arrIata: 'LHR',
+      depUTC: '2026-02-01T07:50',
+      arrUTC: '2026-02-01T15:25',
+    });
+    const back = instance({
+      depIata: 'LHR',
+      arrIata: 'DXB',
+      depUTC: '2026-02-02T13:05',
+      arrUTC: '2026-02-02T20:45',
+    });
+
+    expect(generatePairings([out, back], turnaroundConstraints)).toHaveLength(1);
+  });
+
+  it('keeps existing behavior unchanged when the turnaround fields are absent', () => {
+    const out = instance({
+      depIata: 'DXB',
+      arrIata: 'MCT',
+      depUTC: '2026-02-01T06:00',
+      arrUTC: '2026-02-01T07:15',
+    });
+    const back = instance({
+      depIata: 'MCT',
+      arrIata: 'DXB',
+      depUTC: '2026-02-01T08:30', // 75min ground — below the 8h layover minimum, no turnaround window configured
+      arrUTC: '2026-02-01T09:45',
+    });
+
+    expect(generatePairings([out, back], baseConstraints)).toHaveLength(0);
+  });
+});

@@ -25,12 +25,11 @@ export async function generatePairingsForMonth(
   constraints: Omit<PairingSearchConstraints, 'homeBase'> & { homeBase?: string }
 ): Promise<GeneratedPairing[]> {
   const instances = await ensureFlightInstancesForMonth(prisma, year, month);
+  // Spread rather than copy field-by-field: an explicit field list silently
+  // dropped the turnaround window when it was added to the constraints type.
   return generatePairings(instances, {
+    ...constraints,
     homeBase: constraints.homeBase ?? 'DXB',
-    maxTripDays: constraints.maxTripDays,
-    minLayoverMinutes: constraints.minLayoverMinutes,
-    maxLayoverMinutes: constraints.maxLayoverMinutes,
-    fleetTypes: constraints.fleetTypes,
   });
 }
 

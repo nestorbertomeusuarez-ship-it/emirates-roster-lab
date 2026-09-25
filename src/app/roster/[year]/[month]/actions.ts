@@ -20,6 +20,7 @@ import { generatePairingsForMonth } from '@/pairing/db/pairings';
 import type { DutyType } from '@/pairing/types';
 import { buildMonthlyRosterForFleet, persistGeneratedRoster } from '@/roster-gen/db/rosterGen';
 import type { GenerationStrategy, OffReason } from '@/roster-gen/types';
+import { DEFAULT_PAIRING_CONSTRAINTS } from '@/pairing/constraints';
 
 const GENERATION_STRATEGIES: readonly GenerationStrategy[] = ['MIX', 'MAX_FLYING', 'MAX_DAYS_OFF'];
 const DEFAULT_GENERATION_STRATEGY: GenerationStrategy = 'MIX';
@@ -35,18 +36,12 @@ const OFF_REASON_KEYS: readonly OffReason[] = [
   'WEEKLY_PACING',
   'STREAK_EXTENSION',
   'NO_ELIGIBLE_CANDIDATE',
+  // Appended at the END (docs items 31/32) so an old-format genSummary URL
+  // (from before these reasons existed) still parses its first 5 fields
+  // fine — see page.tsx's parseGenSummary.
+  'POST_LONG_HAUL_REST',
+  'PLANNED_BLOCK',
 ];
-
-/**
- * Pairing-search constraints used by the UI. Not user-configurable yet
- * (that's a reasonable future enhancement, out of scope for this minimal
- * Phase 2 constructor) — see docs/pairing-assumptions.md.
- */
-const UI_PAIRING_CONSTRAINTS = {
-  maxTripDays: 4,
-  minLayoverMinutes: 8 * 60,
-  maxLayoverMinutes: 48 * 60,
-};
 
 function requireString(formData: FormData, key: string): string {
   const value = formData.get(key);
@@ -123,7 +118,7 @@ export async function assignPairingDutyAction(formData: FormData): Promise<void>
     prisma,
     year,
     month,
-    UI_PAIRING_CONSTRAINTS
+    DEFAULT_PAIRING_CONSTRAINTS
   );
   const candidatesForDay = pairings.filter((p) => p.startServiceDate === dateStr);
   const chosen = candidatesForDay[pairingIndex];

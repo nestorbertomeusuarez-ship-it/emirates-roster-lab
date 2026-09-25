@@ -93,8 +93,15 @@ export function generatePairings(
   instances: DatedFlightInstance[],
   constraints: PairingSearchConstraints
 ): GeneratedPairing[] {
-  const { homeBase, maxTripDays, minLayoverMinutes, maxLayoverMinutes, fleetTypes } =
-    constraints;
+  const {
+    homeBase,
+    maxTripDays,
+    minLayoverMinutes,
+    maxLayoverMinutes,
+    fleetTypes,
+    turnaroundMinMinutes,
+    turnaroundMaxMinutes,
+  } = constraints;
 
   if (maxTripDays < 1) {
     throw new Error(`generatePairings: maxTripDays must be >= 1 (got ${maxTripDays})`);
@@ -103,6 +110,32 @@ export function generatePairings(
     throw new Error(
       `generatePairings: invalid layover bounds (min=${minLayoverMinutes}, max=${maxLayoverMinutes})`
     );
+  }
+  const hasTurnaroundWindow =
+    turnaroundMinMinutes != null && turnaroundMaxMinutes != null;
+  if (hasTurnaroundWindow && turnaroundMaxMinutes! < turnaroundMinMinutes!) {
+    throw new Error(
+      `generatePairings: invalid turnaround bounds (min=${turnaroundMinMinutes}, max=${turnaroundMaxMinutes})`
+    );
+  }
+
+  /**
+   * A connection's ground time is acceptable when it falls in EITHER the
+   * ordinary layover window OR the optional turnaround window
+   * (docs/pairing-assumptions.md item 10) — never neither, never a
+   * replacement for the layover window. `hasTurnaroundWindow` false
+   * reproduces the pre-item-10 single-window behavior exactly.
+   */
+  function isAcceptableGroundTime(groundMinutes: number): boolean {
+    if (groundMinutes >= minLayoverMinutes && groundMinutes <= maxLayoverMinutes) return true;
+    if (
+      hasTurnaroundWindow &&
+      groundMinutes >= turnaroundMinMinutes! &&
+      groundMinutes <= turnaroundMaxMinutes!
+    ) {
+      return true;
+    }
+    return false;
   }
 
   const byDep = groupByDeparture(instances);
@@ -130,7 +163,7 @@ export function generatePairings(
         continue; // fleet-type-consistency assumption
       }
       const layover = minutesBetween(lastLeg.arrUTC, next.depUTC);
-      if (layover < minLayoverMinutes || layover > maxLayoverMinutes) {
+      if (!isAcceptableGroundTime(layover)) {
         continue;
       }
       const candidateTripDays = calendarDaySpan(tripStartServiceDate, next.serviceDate);

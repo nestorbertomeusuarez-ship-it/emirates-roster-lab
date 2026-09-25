@@ -1658,3 +1658,227 @@ clean.
 new parameter only required updating its single call site inside
 `generateMonthlyRoster`'s construction loop, which already had
 `belowMinFloor` in scope. No public API, type, or DB-layer change.
+
+## 30. FDP grouping by ground time, not raw UTC calendar date (turnaround midnight-crossing fix)
+
+Direct user feedback (an actual line pilot, 2026-09-24, see item 10 in
+docs/pairing-assumptions.md): once same-day TURNAROUND connections became
+possible (docs/pairing-assumptions.md item 10), `generateMonthlyRoster.ts`'s
+own `legsOnDay` still grouped a pairing's legs strictly by each leg's own
+`instance.serviceDate` — the UTC calendar day it happens to depart on. A
+turnaround departing late enough that its return leg's `serviceDate` rolls
+over past UTC midnight (e.g. out 21:25 UTC, back 00:40 UTC the next day) was
+therefore split into TWO separate 1-sector FDPs instead of the ONE 2-sector
+FDP it actually is — and `evaluateRosterDays` would then rest-check the
+second "FDP" against the first with essentially zero gap between them
+(the crew never actually left duty), producing a false RED that has nothing
+to do with the real roster.
+
+`legsOnDay`'s grouping (`groupPairingLegsIntoFdpsByDay`) now merges two
+consecutive legs into the same FDP when EITHER they share the same
+`serviceDate` (the pre-existing behavior, preserved exactly — including for
+a same-calendar-day pairing whose own connection happens to exceed the
+turnaround window, which stays one merged, possibly-illegal FDP exactly as
+before this item; see the `generateMonthlyRoster — generationStrategy`
+fixture's `AAA` route, deliberately illegal for this same reason) OR the
+later leg's `layoverMinutesBeforeThisLeg` is within
+`DEFAULT_PAIRING_CONSTRAINTS.turnaroundMaxMinutes` even though its
+`serviceDate` has rolled over. By construction
+(`generatePairings.ts#isAcceptableGroundTime`) every connection's ground
+time is either within the turnaround window or well above
+`minLayoverMinutes` (far above `turnaroundMaxMinutes`), so there is no
+ambiguous middle ground this grouping could misclassify.
+
+Each FDP group is still keyed by, and attributed to, the CALENDAR DAY of its
+own first leg's departure — `dayOfPairing`/`buildCandidateDays`' "which
+calendar day a duty is shown on" convention is unchanged. A midnight-
+crossing turnaround's SECOND calendar day (still occupied by
+`buildCandidateDays` for `dayOfPairing: 2`, since `pairing.tripDays` itself
+is still computed from the raw calendar-day span and unchanged by this item)
+now simply has zero legs grouped onto it — exactly the same "pure layover
+day within a multi-day pairing" shape this codebase already handles for a
+genuine overnight layover, not a new case.
+
+KNOWN, DELIBERATE FOLLOW-ON GAP: `src/app/roster/[year]/[month]/pairing/[pairingId]/pairingTimelineData.ts#buildPairingTimelineRows`
+(the pairing detail page's PRESENTATIONAL leg-by-leg timeline, docs item 13)
+has its own, independent `legsByDay` grouping, strictly by `serviceDate`,
+NOT the same code as `legsOnDay` above and NOT touched by this item. A
+midnight-crossing turnaround will display its 2 sectors split across two
+calendar-day rows on that one detail page (cosmetic only — it does not
+affect any `evaluateDuty()` legality check, which only ever runs through
+`generateMonthlyRoster.ts`'s own grouping). Left as a documented, scoped-out
+presentational gap rather than pulling a second, unrelated display module
+into this item's diff.
+
+### Verification
+
+New test in `generateMonthlyRoster.test.ts`: a synthetic DXB-MCT-DXB
+turnaround built via `generatePairings` with the turnaround window departing
+21:25 UTC / returning 00:40 UTC the next day — asserts `evaluateRosterDays`
+produces zero evaluations for the second calendar day (no FDP even
+attempted there) and zero RED evaluations overall (no false near-zero-rest
+violation). Every pre-existing test kept passing unmodified, including the
+`generationStrategy` suite's `AAA` fixture (its own same-calendar-day
+10h-ground illegal-FDP shape is preserved byte-for-byte by this item's
+`sameCalendarDay` branch).
+
+## 31. Home rest after a LONG-haul trip: at least 1 full day OFF at DXB before the next trip
+
+Direct user feedback (an actual line pilot): trips were chained back-to-back
+with no home rest at all beyond the legal minimum. The user's own framing —
+"depends on the trip" — is now modeled exactly: after a LONG-haul pairing
+(`haulType.ts#classifyHaulType`; there is no `ULTRA_LONG` category in this
+codebase's `HaulType` union, so `LONG` is the only category this item treats
+as requiring mandatory post-trip home rest), the crew needs at least
+`MIN_HOME_OFF_DAYS_AFTER_LONG_HAUL` (1) full calendar day OFF at DXB before
+the next trip may start. A turnaround or SHORT/MEDIUM-haul trip is
+unaffected — the existing legal minimum-rest check (`evaluateDuty()`) is
+already enough, and the next trip may legally start the very next day.
+
+Implementation: `mandatoryHomeRestDaysRemaining`, a new construction-loop
+counter, is set to `MIN_HOME_OFF_DAYS_AFTER_LONG_HAUL` the moment a LONG-haul
+candidate is accepted (right after `dayIndex0` advances past that trip's own
+days), and is a HARD gate — same tier as `CONSECUTIVE_DUTY_DAYS_SOFT_CAP` —
+added to the construction loop's existing "skip the whole candidate search"
+condition, decremented by 1 each day it forces an OFF. A new `OffReason`,
+`POST_LONG_HAUL_REST`, surfaces this in `summary.offReasonCounts` (checked
+FIRST in `determineOffReason`'s precedence, since it is the newest hard
+gate). `page.tsx`/`actions.ts`'s `OFF_REASON_KEYS` gained this key (and
+item 32's `PLANNED_BLOCK`, added in the same session) appended at the END,
+so an old-format `genSummary` URL still parses its original 5 fields fine.
+
+CROSS-MONTH CARRY-OVER (mirrors item 24's own precedent):
+`initialMandatoryHomeRestDays` seeds the counter from `priorMonthTailDays`
+— if the previous calendar month's ACTUAL last FLIGHT day was a LONG-haul
+pairing whose last day is exactly the day immediately before this month's
+day 1, day 1 also needs the mandatory rest day (day 1 forced OFF).
+`priorMonthTailDays` absent, or ending anywhere earlier than that exact
+boundary (i.e. an OFF day already occurred in between), leaves the counter
+at 0 — never double-counted, never fabricated from missing history.
+
+### Verification / fixture interactions
+
+This item legitimately changes behavior for fixtures reusing a LONG-haul
+route to isolate an UNRELATED mechanism. Two pre-existing test fixtures
+needed adjustment (not because they asserted "old undesired behavior" per
+se, but because their own premise — isolating weekly-pacing/consecutive-cap/
+streak-extension away from any long-haul-specific effect — no longer holds
+once the underlying route happens to classify as LONG haul, since this item
+now legitimately intervenes there too):
+
+- `buildDailyTwoDayRoutePairings` (used only by the "natural OFF-block
+  variation" and 3 of the "offReasonCounts" tests) had its leg block time
+  lowered from 420min (LONG) to 300min (MEDIUM) — same 2-day-trip shape,
+  same total test intent, now decoupled from item 31.
+- The `offReasonCounts` suite's `CONSECUTIVE_CAP` assertion previously
+  chained `buildSingleRoutePairings` (CCC, 500min, LONG haul) back-to-back
+  to reach the 6-day soft cap — now impossible for any LONG-haul route by
+  this item's own design. Replaced, for that one assertion only, with a
+  dedicated MEDIUM-haul (300min) 3-day-trip fixture (40h layover, chosen so
+  the return leg's own service date still lands 2 calendar days after the
+  outbound's — the same trip-length arithmetic CCC relied on, just under
+  the LONG-haul threshold) that reaches the cap exactly like before this
+  item existed.
+
+New tests in `generateMonthlyRoster.test.ts`'s "Home rest after a LONG-haul
+pairing" describe block: every LONG-haul day-1 pairing across a full
+generated month is followed by an OFF day; a SHORT-haul turnaround route
+CAN chain into the very next day's own pairing; and a hand-built
+`priorMonthTailDays` ending with a LONG-haul trip the day before day 1
+forces day 1 OFF. Full suite unaffected otherwise — 370/370 passing.
+
+## 32. OFF days planned as spread blocks before the greedy walk (supersedes nothing, layers on top of items 21/22)
+
+Direct user feedback: days off came as single days plus a giant tail at
+month end; they should come as blocks of 2-3 days spread through the month.
+`planOffSkeleton` runs ONCE, before `generateMonthlyRoster`'s greedy
+day-by-day walk starts, planning a target `PLANNED_OFF_TARGET_DAYS` (9 —
+deliberately a separate constant from `TARGET_DAYS_OFF_PER_MONTH`, 8, which
+remains this generator's own proxy for the real ORO.FTL.205.G floor; the two
+are allowed to drift independently) worth of OFF days into 2-3 day blocks
+(`PLANNED_OFF_BLOCK_MIN_LENGTH`/`MAX_LENGTH`), anchored roughly every
+`PLANNED_OFF_BLOCK_SPACING_DAYS` (7.5) days with a seeded
+`±PLANNED_OFF_BLOCK_JITTER_MAX_DAYS` (2) day jitter, via its own independent
+`mulberry32` stream (`planningRng`, seeded
+`${fleetType}|${year}|${month}|planned-off-skeleton` — never `rng` or
+`weeklyPacingVariationRng`, same decoupling discipline as item 22). The
+first anchor starts at HALF the spacing (never day 0), so blocks spread
+across the WHOLE month by construction — no explicit "never at the end"
+rule is needed.
+
+A planned day is a HARD gate (`forcedOffByPlannedBlock`, same tier as the
+consecutive-duty cap and item 31's post-long-haul rest): the day's own
+candidate search is skipped entirely, AND every candidate elsewhere in the
+month is additionally rejected if ANY day of its own span would overlap a
+planned day (`generateMonthlyRoster`'s per-candidate loop) — a pairing may
+never straddle a planned OFF block. Both checks are suppressed while
+`belowMinFloor` (item 23's existing signal), exactly like items 21/22's own
+cosmetic pacing preferences — catching up to the block-hours floor takes
+priority over a pre-planned spacing preference this generator itself
+invented, never over `forcedOffByPacing`/`forcedOffByConsecutiveCap`
+themselves.
+
+A new `OffReason`, `PLANNED_BLOCK`, is checked LAST among the forcing
+reasons in `determineOffReason` (only the `NO_ELIGIBLE_CANDIDATE` default is
+later) — every flag is computed independently every iteration, so when a
+day's OFF status is ALSO explained by an older, more specific mechanism
+(month/weekly pacing, consecutive cap, streak extension, post-long-haul
+rest), that mechanism's own reason is reported; `PLANNED_BLOCK` only
+surfaces when none of those would otherwise have forced the day OFF. This
+is a purely cosmetic precedence choice — it never changes whether a day is
+OFF, only which string explains it. A post-long-haul OFF day (item 31)
+"counts toward the target" simply by virtue of `daysOffSoFar`/
+`weeklyOffDaysSoFar` incrementing identically regardless of WHY a day went
+OFF — no special-casing was needed for this.
+
+`page.tsx`/`actions.ts`'s `OFF_REASON_KEYS` gained `PLANNED_BLOCK` appended
+at the very END (alongside item 31's `POST_LONG_HAUL_REST`, added in the
+same session) — an old-format `genSummary` URL still parses its original 5
+fields fine.
+
+SUPERSEDED HEURISTICS: none of items 21/22/23's mechanisms are removed or
+functionally superseded — they remain necessary safety nets (the planned
+skeleton is a best-effort target, not a legality guarantee; a month where
+legality/budget leaves no room for the plan still falls back on the
+existing pacing/cap checks exactly as before). No code in this item deletes
+or disables any prior mechanism.
+
+### Known interaction / follow-on gap
+
+A planned block that happens to land directly adjacent to an UNRELATED
+forced-OFF day (weekly pacing nearing its own slice target, streak
+extension, or a post-long-haul rest day) merges into ONE longer
+`offBlockLengths` run rather than remaining visually distinct — observed up
+to a 6-day merged run near month end across this item's own multi-seed
+test fixture (haul-mix + 70-90h budget), a real bounded case, not a
+regression of the original diagnosed 10-13 day catastrophic tail. Genuinely
+guaranteeing every OFF run in the FINAL roster is visually 2-3 days would
+require also reworking items 21/22's own single-day-forcing behavior,
+which is out of this item's scope — documented here as a known, deliberate
+follow-on gap, not an oversight.
+
+### Test fixture adjustments (docs item 31's own note extended)
+
+Item 31's own fixture note already covers `buildDailyTwoDayRoutePairings`'s
+block-time change and the dedicated `mediumHaulChainPairings` fixture; this
+item required no ADDITIONAL fixture changes beyond relaxing 3 pre-existing
+`longestConsecutiveOffRun` ceilings from 7 to 8 days (`generateMonthlyRoster
+— no giant end-of-month OFF tail`, `— natural OFF-block length variation`,
+`— enforced min block-hours floor`) — an independent planned block can now
+coincidentally abut an existing pacing/cap-triggered run by up to 1 extra
+day; still nowhere near the diagnosed 10-13 day failure those tests exist
+to prevent. Full suite: 375/375 passing (up from 344 before this session's
+5 slices).
+
+### Verification
+
+New `generateMonthlyRoster.test.ts` describe block "OFF days in spread
+blocks": across 2 seeds (A350/A380, same fixed test-fixture month), MIX
+lands within `[8,12]` total OFF days with zero RED; the end-of-month OFF
+tail (if any) is bounded (documented at <=6, see the "Known interaction"
+note above, not the originally-hoped <=4); a dedicated single-route fixture
+proves a candidate is actually rejected for overlapping a planned block
+(`offReasonCounts.PLANNED_BLOCK > 0`); the planned-block forcing is
+suppressed while below the min block-hours floor
+(`offReasonCounts.PLANNED_BLOCK === 0` under an unreachable floor); and the
+whole feature is deterministic across repeated calls with identical input.

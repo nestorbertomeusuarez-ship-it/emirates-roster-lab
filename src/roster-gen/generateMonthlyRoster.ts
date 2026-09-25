@@ -319,6 +319,7 @@ import type {
   RestPeriodInput,
 } from '../ftl/types';
 import { classifyHaulType, type HaulType } from './haulType';
+import { DEFAULT_PAIRING_CONSTRAINTS } from '../pairing/constraints';
 import type {
   DatedRuleEvaluation,
   GenerateMonthlyRosterInput,
@@ -355,9 +356,114 @@ const WEEKLY_BLOCK_TOLERANCE_FRACTION = 0.5;
 const WEEKLY_PACING_TRIGGER_SLACK_MAX_DAYS = 2;
 /** See the module doc comment's "NATURAL OFF-BLOCK VARIATION" section (docs item 22) — max extra days a weekly-pacing-triggered OFF streak may continue beyond its mechanical minimum. */
 const OFF_STREAK_EXTENSION_MAX_DAYS = 2;
+/**
+ * Docs item 31 ("home rest after long-haul") — the minimum number of full
+ * calendar days OFF at home base (DXB) required immediately after a
+ * LONG-haul trip (`haulType.ts#classifyHaulType`) ends, before the next
+ * trip may start. Direct user feedback (an actual line pilot): "depends on
+ * the trip" — after a LONG-haul trip, at least 1 full day OFF at DXB;
+ * after a turnaround or short/medium trip, ordinary legal GCAA rest is
+ * enough (the existing `evaluateDuty()` minimum-rest check already covers
+ * that case, unchanged by this item). This is a hard construction-time
+ * gate (like `CONSECUTIVE_DUTY_DAYS_SOFT_CAP`), never merely a preference —
+ * see `mandatoryHomeRestDaysRemaining` in the construction loop below.
+ */
+const MIN_HOME_OFF_DAYS_AFTER_LONG_HAUL = 1;
+/**
+ * Docs item 32 ("OFF days in spread blocks") — target number of OFF days the
+ * PLANNED skeleton (`planOffSkeleton` below) aims for, BEFORE the greedy
+ * construction walk runs. Deliberately a separate constant from
+ * `TARGET_DAYS_OFF_PER_MONTH` (8, the month-level pacing floor's own
+ * target) rather than reusing it: this is a slightly more generous
+ * "how many days should be pre-planned OFF for a good spread" target, not
+ * this generator's proxy for the real ORO.FTL.205.G legal floor — the two
+ * numbers are allowed to drift independently. Direct user feedback: days
+ * off should come as 2-3 day BLOCKS spread through the month, not single
+ * days plus a giant end-of-month tail.
+ */
+const PLANNED_OFF_TARGET_DAYS = 9;
+/** Docs item 32 — a planned OFF block is 2 or 3 days long (`rng`-chosen), never 1 or 4+. */
+const PLANNED_OFF_BLOCK_MIN_LENGTH = 2;
+const PLANNED_OFF_BLOCK_MAX_LENGTH = 3;
+/** Docs item 32 — roughly one planned block per this many calendar days (a soft anchor spacing, not a hard rule — see `planOffSkeleton`'s own jitter). */
+const PLANNED_OFF_BLOCK_SPACING_DAYS = 7.5;
+/** Docs item 32 — max days a planned block's start may jitter earlier/later than its mechanical anchor position, so blocks don't land on a mechanically identical day-of-week/position every month. */
+const PLANNED_OFF_BLOCK_JITTER_MAX_DAYS = 2;
+
+/**
+ * Plans a set of OFF-day calendar positions (0-based day indices) BEFORE the
+ * greedy construction walk runs (docs item 32) — 2-3 day blocks, spaced
+ * roughly every `PLANNED_OFF_BLOCK_SPACING_DAYS` days with a small seeded
+ * jitter, targeting `PLANNED_OFF_TARGET_DAYS` total. Deterministic per
+ * `rng`'s own seed (see `generateMonthlyRoster`'s `planningRng`, its own
+ * independent stream — never `rng` or `weeklyPacingVariationRng`, so adding
+ * this feature never perturbs either existing stream's draw sequence,
+ * exactly like item 22's own precedent for a new seeded knob).
+ *
+ * The first anchor starts at HALF the spacing (never day 0 outright) so a
+ * block never mechanically opens the very first day of every month, and
+ * anchors advance by the full spacing thereafter — this naturally spreads
+ * blocks across the WHOLE month (never clustered at the end) without
+ * needing an explicit "not in the last N days" rule.
+ */
+function planOffSkeleton(daysInMonth: number, rng: () => number): Set<number> {
+  const planned = new Set<number>();
+  let anchor = PLANNED_OFF_BLOCK_SPACING_DAYS / 2;
+
+  while (planned.size < PLANNED_OFF_TARGET_DAYS && anchor < daysInMonth) {
+    const jitter = Math.round((rng() - 0.5) * 2 * PLANNED_OFF_BLOCK_JITTER_MAX_DAYS);
+    const blockLength =
+      rng() < 0.5 ? PLANNED_OFF_BLOCK_MIN_LENGTH : PLANNED_OFF_BLOCK_MAX_LENGTH;
+    const start0 = Math.max(0, Math.min(daysInMonth - 1, Math.round(anchor) + jitter));
+
+    for (let k = 0; k < blockLength && planned.size < PLANNED_OFF_TARGET_DAYS; k += 1) {
+      const dayIndex0 = start0 + k;
+      if (dayIndex0 >= daysInMonth) break;
+      planned.add(dayIndex0);
+    }
+
+    anchor += PLANNED_OFF_BLOCK_SPACING_DAYS;
+  }
+
+  return planned;
+}
 
 function isoDate(year: number, month: number, day: number): string {
   return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10);
+}
+
+/** 'YYYY-MM-DD' + N days -> 'YYYY-MM-DD', UTC calendar arithmetic (docs item 31). */
+function addDaysIso(dateIso: string, days: number): string {
+  const d = new Date(`${dateIso}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Docs item 31 — the ULTRA_LONG haul type doesn't exist in this codebase's `HaulType` union (see haulType.ts); LONG is the only category this generator treats as requiring mandatory post-trip home rest. */
+function isLongHaulPairing(pairing: GeneratedPairing): boolean {
+  return classifyHaulType(pairing) === 'LONG';
+}
+
+/**
+ * Docs item 31 — cross-month carry-over (mirrors item 24's own precedent for
+ * rest/consecutive-duty-day carry-over): if `priorMonthTailDays`'s last real
+ * FLIGHT day was a LONG-haul pairing whose last calendar day is exactly the
+ * day immediately before this month's day 1, day 1 needs the same mandatory
+ * home-rest day as if the trip had ended inside this month. If the prior
+ * month's last FLIGHT day was earlier than that (i.e. there was already at
+ * least one OFF day between it and this month's day 1), the requirement is
+ * already satisfied and this returns 0 — never double-counted.
+ */
+function initialMandatoryHomeRestDays(
+  priorMonthTailDays: RosterGenDay[] | undefined,
+  firstDateOfMonth: string
+): number {
+  if (!priorMonthTailDays || priorMonthTailDays.length === 0) return 0;
+  const last = priorMonthTailDays[priorMonthTailDays.length - 1];
+  if (last.assignment.type !== 'FLIGHT') return 0;
+  if (!isLongHaulPairing(last.assignment.pairing)) return 0;
+  if (addDaysIso(last.date, 1) !== firstDateOfMonth) return 0;
+  return MIN_HOME_OFF_DAYS_AFTER_LONG_HAUL;
 }
 
 function daysInMonthOf(year: number, month: number): number {
@@ -481,10 +587,60 @@ function trailingCount(flags: boolean[], endIndex: number, windowSize: number): 
   return count;
 }
 
+/**
+ * Groups one pairing's legs into FDPs by GROUND TIME, not raw UTC calendar
+ * date (docs/roster-gen-assumptions.md item 30): a same-day TURNAROUND (docs
+ * item 10/`DEFAULT_PAIRING_CONSTRAINTS.turnaroundMaxMinutes`) can depart late
+ * enough to have its return leg's `serviceDate` land on the NEXT UTC
+ * calendar day even though the crew never left the FDP — e.g. departing
+ * 21:25 UTC and returning 00:40 UTC the next day is ONE 2-sector FDP, not
+ * two separate 1-sector FDPs with an (illegal) near-zero rest between them.
+ *
+ * Two legs stay in the SAME FDP group when either:
+ *   - they share the exact same `instance.serviceDate` (the pre-item-30
+ *     behavior, preserved as-is — e.g. a same-calendar-day pairing whose own
+ *     mandatory layover happens to exceed the turnaround window is still one
+ *     merged, and possibly FDP-table-illegal, duty, exactly as before this
+ *     item); or
+ *   - the later leg's `layoverMinutesBeforeThisLeg` is within
+ *     `turnaroundMaxMinutes`, EVEN when its `serviceDate` has rolled over to
+ *     the next UTC calendar day — this is the new case this item adds: a
+ *     same-day TURNAROUND (docs item 10) that happens to depart late enough
+ *     for its return leg's `serviceDate` to land on the next UTC day, e.g.
+ *     departing 21:25 UTC and returning 00:40 UTC the next day.
+ * Every other connection (by construction, always >= `minLayoverMinutes`,
+ * far above `turnaroundMaxMinutes` — `generatePairings.ts#isAcceptableGroundTime`)
+ * starts a new group. Each group is keyed by the CALENDAR DAY of its own
+ * first leg's departure (`instance.serviceDate`) — this is the "which
+ * calendar day a duty is shown on" convention `dayOfPairing`/
+ * `buildCandidateDays` already use, unchanged by this item.
+ */
+function groupPairingLegsIntoFdpsByDay(
+  pairing: GeneratedPairing
+): Map<string, PairingLegResult[]> {
+  const groups = new Map<string, PairingLegResult[]>();
+  let currentDay: string | null = null;
+
+  for (const leg of pairing.legs) {
+    const sameCalendarDay = currentDay !== null && leg.instance.serviceDate === currentDay;
+    const isTurnaroundRollover =
+      currentDay !== null &&
+      leg.layoverMinutesBeforeThisLeg != null &&
+      leg.layoverMinutesBeforeThisLeg <= DEFAULT_PAIRING_CONSTRAINTS.turnaroundMaxMinutes;
+
+    if (currentDay !== null && (sameCalendarDay || isTurnaroundRollover)) {
+      groups.get(currentDay)!.push(leg);
+    } else {
+      currentDay = leg.instance.serviceDate;
+      groups.set(currentDay, [leg]);
+    }
+  }
+
+  return groups;
+}
+
 function legsOnDay(pairing: GeneratedPairing, date: string): PairingLegResult[] {
-  return pairing.legs
-    .filter((leg) => leg.instance.serviceDate === date)
-    .sort((a, b) => a.instance.depUTC.getTime() - b.instance.depUTC.getTime());
+  return groupPairingLegsIntoFdpsByDay(pairing).get(date) ?? [];
 }
 
 interface DailyArrays {
@@ -914,12 +1070,23 @@ function determineOffReason(
   forcedOffByPacing: boolean,
   forcedOffByConsecutiveCap: boolean,
   forcedOffByWeeklyPacing: boolean,
-  forcedOffByStreakExtension: boolean
+  forcedOffByStreakExtension: boolean,
+  forcedOffByPostLongHaulRest: boolean,
+  forcedOffByPlannedBlock: boolean
 ): OffReason {
+  // Docs item 32 — `forcedOffByPlannedBlock` is checked LAST among the
+  // forcing reasons (only `NO_ELIGIBLE_CANDIDATE`'s default is later): every
+  // flag here is computed independently of the others every iteration, so
+  // when a day's OFF status is ALSO explained by an older, more specific
+  // mechanism (pacing/consecutive-cap/weekly-pacing/streak-extension), that
+  // mechanism's own reason is reported — the plan only ever explains a day
+  // that would not otherwise have needed to be forced OFF.
+  if (forcedOffByPostLongHaulRest) return 'POST_LONG_HAUL_REST';
   if (forcedOffByPacing) return 'MONTH_PACING';
   if (forcedOffByConsecutiveCap) return 'CONSECUTIVE_CAP';
   if (forcedOffByWeeklyPacing) return 'WEEKLY_PACING';
   if (forcedOffByStreakExtension) return 'STREAK_EXTENSION';
+  if (forcedOffByPlannedBlock) return 'PLANNED_BLOCK';
   return 'NO_ELIGIBLE_CANDIDATE';
 }
 
@@ -931,6 +1098,8 @@ function computeOffReasonCounts(days: RosterGenDay[]): Record<OffReason, number>
     WEEKLY_PACING: 0,
     STREAK_EXTENSION: 0,
     NO_ELIGIBLE_CANDIDATE: 0,
+    POST_LONG_HAUL_REST: 0,
+    PLANNED_BLOCK: 0,
   };
   for (const day of days) {
     if (day.assignment.type === 'OFF' && day.assignment.reason) {
@@ -982,6 +1151,11 @@ export function generateMonthlyRoster(
   const weeklyPacingVariationRng = mulberry32(
     hashSeed(`${fleetType}|${year}|${month}|weekly-pacing-variation`)
   );
+  // Docs item 32 — separate seeded stream for the planned OFF-day skeleton,
+  // decided ONCE up front before the greedy walk runs (same independent-
+  // stream discipline as `weeklyPacingVariationRng` above).
+  const planningRng = mulberry32(hashSeed(`${fleetType}|${year}|${month}|planned-off-skeleton`));
+  const plannedOffDayIndices = planOffSkeleton(daysInMonth, planningRng);
 
   const days: RosterGenDay[] = [];
   let dayIndex0 = 0; // 0-based cursor
@@ -1006,6 +1180,13 @@ export function generateMonthlyRoster(
   // while it runs.
   let sliceTriggerSlackDays = 0;
   let offStreakExtensionRemainingDays = 0;
+  // Docs item 31 — mandatory home-rest days remaining after a LONG-haul trip
+  // (0 outside such a window); may start non-zero via `priorMonthTailDays`
+  // carry-over. Decremented once per forced OFF day while positive.
+  let mandatoryHomeRestDaysRemaining = initialMandatoryHomeRestDays(
+    priorMonthTailDays,
+    dates[0]
+  );
 
   while (dayIndex0 < daysInMonth) {
     const date = dates[dayIndex0];
@@ -1052,6 +1233,17 @@ export function generateMonthlyRoster(
       dayIndex0 + 1 >= PACING_CHECK_FROM_DAY && stillNeeded >= remainingDaysInMonth;
     const forcedOffByConsecutiveCap =
       consecutiveDutyDaysBefore >= CONSECUTIVE_DUTY_DAYS_SOFT_CAP;
+    // Docs item 31 — a hard gate, same tier as the consecutive-duty cap:
+    // while a mandatory post-long-haul home-rest day is owed, no candidate
+    // is ever offered, regardless of legality/budget/pacing.
+    const forcedOffByPostLongHaulRest = mandatoryHomeRestDaysRemaining > 0;
+    // Docs item 32 — the planned OFF-day skeleton, decided up front. Like
+    // item 23's other cosmetic pacing/spacing preferences, suppressed while
+    // `belowMinFloor` (catching up to the block-hours floor takes priority
+    // over a pre-planned spacing preference this generator itself invented)
+    // — never suppressed for a real legality/budget-ceiling reason, and
+    // never for `forcedOffByPacing`/`forcedOffByConsecutiveCap` themselves.
+    const forcedOffByPlannedBlock = !belowMinFloor && plannedOffDayIndices.has(dayIndex0);
 
     let assignedPairing: GeneratedPairing | null = null;
 
@@ -1059,7 +1251,9 @@ export function generateMonthlyRoster(
       !forcedOffByPacing &&
       !forcedOffByConsecutiveCap &&
       !forcedOffByWeeklyPacing &&
-      !forcedOffByStreakExtension
+      !forcedOffByStreakExtension &&
+      !forcedOffByPostLongHaulRest &&
+      !forcedOffByPlannedBlock
     ) {
       const candidates = candidatesByStart.get(date) ?? [];
       const monthBudgetFiltered = filterCandidatesWithinBudget(
@@ -1096,6 +1290,23 @@ export function generateMonthlyRoster(
           remainingDaysInSlice - candidate.tripDays
         );
         if (!belowMinFloor && remainingDaysInSliceAfterCandidate < weeklyStillNeededOff) continue;
+        // Docs item 32 — a candidate must not overlap ANY planned OFF day
+        // anywhere in its own span, not just on the day it starts (the
+        // day-level `forcedOffByPlannedBlock` gate above only ever catches
+        // the case where `dayIndex0` itself is the planned day; a multi-day
+        // candidate starting BEFORE a planned block could otherwise still
+        // run straight through it). Same `belowMinFloor` suppression as the
+        // day-level gate, for the same reason.
+        if (!belowMinFloor) {
+          let overlapsPlannedOff = false;
+          for (let k = 0; k < candidate.tripDays; k += 1) {
+            if (plannedOffDayIndices.has(dayIndex0 + k)) {
+              overlapsPlannedOff = true;
+              break;
+            }
+          }
+          if (overlapsPlannedOff) continue;
+        }
 
         const candidateDays = buildCandidateDays(candidate, dates, dayIndex0);
         const hypothetical = [...days, ...candidateDays];
@@ -1121,6 +1332,12 @@ export function generateMonthlyRoster(
             destinationCountsSoFar[station] = (destinationCountsSoFar[station] ?? 0) + 1;
           }
           offStreakExtensionRemainingDays = 0; // flying resumed — any active streak ends
+          // Docs item 31 — a LONG-haul trip owes at least 1 mandatory home
+          // rest day starting the very next calendar day (dayIndex0 has
+          // already advanced past this trip's own days above).
+          if (isLongHaulPairing(candidate)) {
+            mandatoryHomeRestDaysRemaining = MIN_HOME_OFF_DAYS_AFTER_LONG_HAUL;
+          }
           break;
         }
       }
@@ -1131,12 +1348,17 @@ export function generateMonthlyRoster(
         forcedOffByPacing,
         forcedOffByConsecutiveCap,
         forcedOffByWeeklyPacing,
-        forcedOffByStreakExtension
+        forcedOffByStreakExtension,
+        forcedOffByPostLongHaulRest,
+        forcedOffByPlannedBlock
       );
       days.push({ date, assignment: { type: 'OFF', reason: offReason } });
       daysOffSoFar += 1;
       weeklyOffDaysSoFar += 1;
       dayIndex0 += 1;
+      if (mandatoryHomeRestDaysRemaining > 0) {
+        mandatoryHomeRestDaysRemaining -= 1;
+      }
 
       // Natural OFF-block variation (docs item 22) — see the module doc
       // comment. Only a FRESH streak caused specifically by the weekly
