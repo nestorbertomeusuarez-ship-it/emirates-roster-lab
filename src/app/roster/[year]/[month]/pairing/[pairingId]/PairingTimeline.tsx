@@ -12,6 +12,7 @@
  * consistency with the calendar grid.
  */
 
+import { routeLabel } from '@/lib/airportCityNames';
 import type { Severity } from '@/ftl/types';
 import type { PairingTimelineRow } from './pairingTimelineData';
 
@@ -90,7 +91,7 @@ export default function PairingTimeline({ rows, worstSeverityByDate }: PairingTi
               </td>
               <td className="py-1 pr-2 align-top whitespace-nowrap">{row.flightNumber}</td>
               <td className="py-1 pr-2 align-top whitespace-nowrap">
-                {row.depIata}&rarr;{row.arrIata}
+                {routeLabel([row.depIata, row.arrIata], ' → ')}
               </td>
               <td className="py-1 pr-2 align-top whitespace-nowrap">{row.depLocalTime}</td>
               <td className="py-1 pr-2 align-top whitespace-nowrap">{row.arrLocalTime}</td>

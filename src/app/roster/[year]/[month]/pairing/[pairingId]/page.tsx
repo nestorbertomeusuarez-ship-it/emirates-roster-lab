@@ -20,6 +20,7 @@
  * pairing spanning outside the requested month's window is handled.
  */
 
+import { routeLabel } from '@/lib/airportCityNames';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { loadPairingById } from '@/pairing/db/loadPairing';
@@ -93,10 +94,12 @@ export default async function PairingDetailPage({ params }: PairingDetailPagePro
   const rows = buildPairingTimelineRows(pairing, airportTimeZones);
   const worstSeverityByDate = buildWorstSeverityMap(pairingEvaluations);
 
-  const route = pairing.legs
-    .map((leg) => leg.instance.depIata)
-    .concat(pairing.legs[pairing.legs.length - 1].instance.arrIata)
-    .join(' → ');
+  const route = routeLabel(
+    pairing.legs
+      .map((leg) => leg.instance.depIata)
+      .concat(pairing.legs[pairing.legs.length - 1].instance.arrIata),
+    ' → '
+  );
 
   return (
     <main className="p-6 max-w-5xl mx-auto">

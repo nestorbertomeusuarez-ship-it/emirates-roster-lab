@@ -106,3 +106,13 @@ export function cityLabel(iata: string): string {
   const city = AIRPORT_CITY_NAMES[iata];
   return city ? `${iata} (${city})` : iata;
 }
+
+/**
+ * Formats a whole route (ordered station codes) with `cityLabel` applied to
+ * every station, e.g. `"DXB–BOM (Mumbai)–DXB"` or `"KIX (Osaka)–DXB"`.
+ * Labelling only the last station hid the city on return legs and on
+ * turnarounds, where the destination sits mid-route.
+ */
+export function routeLabel(stations: readonly string[], separator = '–'): string {
+  return stations.map(cityLabel).join(separator);
+}

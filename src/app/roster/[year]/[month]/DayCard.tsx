@@ -6,7 +6,7 @@ import type { Severity } from '@/ftl/types';
 import type { CalendarBadgeCategory, DayCategory } from './dayPresentation';
 import { resolveCalendarBadgeCategory } from './dayPresentation';
 import type { FlightDaySummary } from './flightDaySummary';
-import { cityLabel } from '@/lib/airportCityNames';
+import { cityLabel, routeLabel } from '@/lib/airportCityNames';
 import {
   assignPairingDutyAction,
   assignSimpleDutyAction,
@@ -168,12 +168,9 @@ export default function DayCard({
 
   const bandLabel = (() => {
     if (category === 'FLIGHT' && flightSummary?.category === 'FLIGHT') {
-      // `cityLabel` already renders "KIX (Osaka)" for a non-DXB station, so
-      // only the intermediate codes are joined with a dash — the final leg
-      // gets its city name from `cityLabel` itself, e.g. "DXB–KIX (Osaka)".
-      const legs = flightSummary.route.split('→');
-      const lastLeg = cityLabel(legs[legs.length - 1]);
-      return [...legs.slice(0, -1), lastLeg].join('–');
+      // Every station gets its city, e.g. "KIX (Osaka)–DXB" on a return leg
+      // or "DXB–BOM (Mumbai)–DXB" on a turnaround.
+      return routeLabel(flightSummary.route.split('→'));
     }
     if (category === 'LAYOVER' && flightSummary?.category === 'LAYOVER') {
       return `${cityLabel(flightSummary.atIata)} layover`;
