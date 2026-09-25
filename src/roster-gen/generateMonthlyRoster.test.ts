@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { generatePairings } from '../pairing/generatePairings';
-import { evaluateRosterDays, generateMonthlyRoster } from './generateMonthlyRoster';
+import {
+  evaluateRosterDays,
+  generateMonthlyRoster,
+  hashSeed,
+  mulberry32,
+  planOffSkeleton,
+} from './generateMonthlyRoster';
 import { classifyHaulType, type HaulType } from './haulType';
 import type { DatedFlightInstance, GeneratedPairing } from '../pairing/types';
 import type { GenerationStrategy, RosterGenDay } from './types';
@@ -801,8 +807,16 @@ describe('generateMonthlyRoster — weekly block-budget pacing (docs item 21)', 
   });
 });
 
-describe('generateMonthlyRoster — weekly days-off pacing (docs item 21)', () => {
-  it('never lets a week-slice end with zero OFF days when enough legal OFF-forcing opportunities exist', () => {
+describe('generateMonthlyRoster — weekly days-off pacing (docs item 21, SUPERSEDED by item 33)', () => {
+  // SUPERSEDED (docs item 33): the "every 7-day week slice gets >=1 OFF day"
+  // guarantee this test used to assert was provided by the weekly-pacing
+  // trigger (docs item 21's layer 2), which is now permanently retired —
+  // docs item 32's planned OFF skeleton (spaced ~12 days apart, not a
+  // strict per-7-day-slice guarantee) replaces its job of "spread days off
+  // through the month" without promising every single calendar week gets
+  // one. This test now documents that retirement directly instead of
+  // asserting a guarantee the generator no longer makes.
+  it('no longer forces a WEEKLY_PACING/STREAK_EXTENSION OFF day — both mechanisms are retired', () => {
     const pairings = buildFixturePairings('A350');
     const result = generateMonthlyRoster({
       fleetType: 'A350',
@@ -812,19 +826,8 @@ describe('generateMonthlyRoster — weekly days-off pacing (docs item 21)', () =
       airportTimeZones: AIRPORT_TZS,
     });
 
-    const offCountByWeek = new Map<number, number>();
-    result.days.forEach((d, idx) => {
-      const week = weekSliceIndexOfDayIndex0(idx);
-      if (d.assignment.type === 'OFF') {
-        offCountByWeek.set(week, (offCountByWeek.get(week) ?? 0) + 1);
-      } else if (!offCountByWeek.has(week)) {
-        offCountByWeek.set(week, 0);
-      }
-    });
-
-    for (const [week, offCount] of offCountByWeek.entries()) {
-      expect(offCount, `week slice ${week} had zero OFF days`).toBeGreaterThanOrEqual(1);
-    }
+    expect(result.summary.offReasonCounts.WEEKLY_PACING).toBe(0);
+    expect(result.summary.offReasonCounts.STREAK_EXTENSION).toBe(0);
   });
 });
 
@@ -968,13 +971,17 @@ describe('generateMonthlyRoster — natural OFF-block length variation (docs ite
 });
 
 describe('generateMonthlyRoster — enforced min block-hours floor (docs item 23)', () => {
-  it('flies more (reaching closer to or past the floor) than the same fixture with no floor set', () => {
+  it('flies at least as much (reaching closer to or past the floor) as the same fixture with no floor set', () => {
     // Single dominant 1000-block-min/3-day route, no smaller legal
     // alternative — the exact fixture item 21's "no giant tail" test uses.
-    // Without a floor, the weekly block-budget filter (layer 1) and weekly
-    // pacing trigger (layer 2) leave this fixture well under 70h. With the
-    // floor set, those two cosmetic heuristics are suppressed below it, so
-    // strictly more flying should happen for the identical candidate pool.
+    // Assertion relaxed from strictly-greater to greater-or-equal (docs item
+    // 33): this used to rely on BOTH the weekly block-budget filter (layer
+    // 1) and the weekly-pacing trigger (layer 2, now retired) being
+    // suppressed below the floor to guarantee a measurable early-month
+    // difference. With only layer 1 left, this exact fixture (enough
+    // calendar days for either pacing style to eventually reach the same
+    // 90h hard ceiling) can legitimately converge to an IDENTICAL total —
+    // never less, which is still the property that matters.
     const pairingsNoFloor = buildSingleRoutePairings('A350');
     const withoutFloor = generateMonthlyRoster({
       fleetType: 'A350',
@@ -996,7 +1003,7 @@ describe('generateMonthlyRoster — enforced min block-hours floor (docs item 23
       targetBlockMinutesMax: 90 * 60,
     });
 
-    expect(withFloor.summary.totalBlockMinutes).toBeGreaterThan(
+    expect(withFloor.summary.totalBlockMinutes).toBeGreaterThanOrEqual(
       withoutFloor.summary.totalBlockMinutes
     );
     expect(withFloor.summary.totalBlockMinutes).toBeGreaterThanOrEqual(70 * 60);
@@ -1233,15 +1240,15 @@ describe('generateMonthlyRoster — cross-month rest + consecutive-duty-day carr
 });
 
 describe('generateMonthlyRoster — offReasonCounts (docs item 25)', () => {
-  it('tallies MONTH_PACING once weekly pacing is suppressed and legality never binds (docs items 23/25)', () => {
-    // With targetBlockMinutesMin set unreachably high, weekly pacing (item
-    // 21 layer 2) is suppressed for the whole month (item 23) — the only
-    // remaining OFF-day causes are the consecutive-duty soft cap and,
-    // eventually, this month-level backstop. Confirmed the ordinary
-    // (unsuppressed) weekly-pacing pace usually reaches the month target
-    // well before day 24 on its own, making MONTH_PACING rare in practice —
-    // this fixture deliberately removes that competing mechanism to
-    // exercise the backstop directly.
+  it('reaches its days-off target via the month-level backstop and/or the planned skeleton (docs items 23/25/33)', () => {
+    // Docs item 33: the weekly-pacing trigger (item 21 layer 2) this test
+    // used to isolate the month-level backstop AGAINST is now retired, and
+    // docs item 32's planned OFF skeleton (never suppressed by
+    // `belowMinFloor` — item 33's own change) now often supplies enough OFF
+    // days on its own that the month-level backstop (`MONTH_PACING`,
+    // day-24-onward) never needs to fire at all — a good outcome in
+    // practice, not a regression. This test now asserts the OR of both
+    // mechanisms, rather than forcing MONTH_PACING specifically.
     const pairings = buildDailySingleLegPairings('A350');
     const result = generateMonthlyRoster({
       fleetType: 'A350',
@@ -1252,10 +1259,12 @@ describe('generateMonthlyRoster — offReasonCounts (docs item 25)', () => {
       targetBlockMinutesMin: 999_999 * 60,
     });
 
-    expect(result.summary.offReasonCounts.MONTH_PACING).toBeGreaterThan(0);
+    expect(
+      result.summary.offReasonCounts.MONTH_PACING + result.summary.offReasonCounts.PLANNED_BLOCK
+    ).toBeGreaterThan(0);
   });
 
-  it('tallies WEEKLY_PACING for the fixture item 22 already uses to isolate it, and CONSECUTIVE_CAP for the plain single-route fixture', () => {
+  it('never tallies WEEKLY_PACING (retired, docs item 33) and still tallies CONSECUTIVE_CAP for a chained fixture', () => {
     const weeklyPacingResult = generateMonthlyRoster({
       fleetType: 'A350',
       year: YEAR,
@@ -1263,7 +1272,9 @@ describe('generateMonthlyRoster — offReasonCounts (docs item 25)', () => {
       pairings: buildDailyTwoDayRoutePairings('A350'),
       airportTimeZones: AIRPORT_TZS,
     });
-    expect(weeklyPacingResult.summary.offReasonCounts.WEEKLY_PACING).toBeGreaterThan(0);
+    // SUPERSEDED by docs item 33 — the weekly-pacing trigger this fixture
+    // used to isolate is permanently retired; always tallies 0 now.
+    expect(weeklyPacingResult.summary.offReasonCounts.WEEKLY_PACING).toBe(0);
 
     // buildDailyTwoDayRoutePairings' own 2-day trips never chain long
     // enough to hit the 6-day consecutive-duty soft cap. A dedicated
@@ -1290,10 +1301,12 @@ describe('generateMonthlyRoster — offReasonCounts (docs item 25)', () => {
     );
     // `targetBlockMinutesMin` set unreachably high (same pattern the
     // MONTH_PACING assertion above already uses) keeps `belowMinFloor` true
-    // for the whole month, which suppresses docs item 32's planned OFF
-    // skeleton (`forcedOffByPlannedBlock`) alongside the other cosmetic
-    // pacing/spacing preferences it already suppressed — never
-    // `forcedOffByConsecutiveCap` itself, which this assertion isolates.
+    // for the whole month, which suppresses layer 1's weekly budget filter
+    // — never `forcedOffByConsecutiveCap` itself (which this assertion
+    // isolates), and NOT docs item 32's planned OFF skeleton either (docs
+    // item 33 — the plan is unconditional now, so it may ALSO contribute
+    // some OFF days here; this assertion only cares that CONSECUTIVE_CAP is
+    // still reachable, not that it's the only reason).
     const consecutiveCapResult = generateMonthlyRoster({
       fleetType: 'A350',
       year: YEAR,
@@ -1305,7 +1318,10 @@ describe('generateMonthlyRoster — offReasonCounts (docs item 25)', () => {
     expect(consecutiveCapResult.summary.offReasonCounts.CONSECUTIVE_CAP).toBeGreaterThan(0);
   });
 
-  it('tallies STREAK_EXTENSION for the same fixture — item 22 already proves it produces varying-length OFF blocks, which requires at least one extension firing', () => {
+  it('never tallies STREAK_EXTENSION (retired, docs item 33)', () => {
+    // SUPERSEDED by docs item 33 — the natural-variation streak extension
+    // (docs item 22) was only ever a knob ON TOP OF the now-retired weekly-
+    // pacing trigger; always tallies 0 now.
     const pairings = buildDailyTwoDayRoutePairings('A350');
     const result = generateMonthlyRoster({
       fleetType: 'A350',
@@ -1315,7 +1331,7 @@ describe('generateMonthlyRoster — offReasonCounts (docs item 25)', () => {
       airportTimeZones: AIRPORT_TZS,
     });
 
-    expect(result.summary.offReasonCounts.STREAK_EXTENSION).toBeGreaterThan(0);
+    expect(result.summary.offReasonCounts.STREAK_EXTENSION).toBe(0);
   });
 
   it('tallies NO_ELIGIBLE_CANDIDATE for the hard-ceiling fixture (docs item 20) once the budget is exhausted', () => {
@@ -1785,7 +1801,15 @@ describe('OFF days in spread blocks (docs/roster-gen-assumptions.md item 32)', (
     expect(result.summary.offReasonCounts.PLANNED_BLOCK).toBeGreaterThan(0);
   });
 
-  it('is suppressed while below the enforced min block-hours floor (docs item 23), same as the other cosmetic pacing preferences', () => {
+  it('is NOT suppressed by the enforced min block-hours floor (docs item 33 — a deliberate change from item 32\'s original design)', () => {
+    // Docs item 33: the planned skeleton used to be suppressed while
+    // `belowMinFloor`, like the (now-retired) weekly-pacing trigger it was
+    // originally modeled after — but that suppression made the plan
+    // invisible for most of a real month (which starts at 0 block-minutes
+    // and stays below a real floor like 70h for a large stretch). It is now
+    // the PRIMARY days-off-distribution mechanism, so it applies
+    // unconditionally; catching up to the floor happens around the plan,
+    // not by ignoring it.
     const pairings = buildSingleRoutePairings('A350');
     const result = generateMonthlyRoster({
       fleetType: 'A350',
@@ -1796,7 +1820,7 @@ describe('OFF days in spread blocks (docs/roster-gen-assumptions.md item 32)', (
       targetBlockMinutesMin: 999_999 * 60,
     });
 
-    expect(result.summary.offReasonCounts.PLANNED_BLOCK).toBe(0);
+    expect(result.summary.offReasonCounts.PLANNED_BLOCK).toBeGreaterThan(0);
   });
 
   it('is deterministic — identical fleet/year/month inputs produce byte-for-byte identical planned skeletons across repeated runs', () => {
@@ -1816,4 +1840,41 @@ describe('OFF days in spread blocks (docs/roster-gen-assumptions.md item 32)', (
     expect(second.days).toEqual(first.days);
     expect(second.summary).toEqual(first.summary);
   });
+});
+
+describe('planOffSkeleton — no crowded/merged blocks (docs/roster-gen-assumptions.md item 33)', () => {
+  function contiguousRuns(planned: Set<number>): Array<{ start: number; end: number }> {
+    const sorted = [...planned].sort((a, b) => a - b);
+    const runs: Array<{ start: number; end: number }> = [];
+    for (const day of sorted) {
+      const last = runs[runs.length - 1];
+      if (last && day === last.end + 1) {
+        last.end = day;
+      } else {
+        runs.push({ start: day, end: day });
+      }
+    }
+    return runs;
+  }
+
+  it.each([28, 29, 30, 31])(
+    '%i-day month: every planned block is 2-3 days, and consecutive blocks never crowd into one merged run (>=3 flying days between them), across 30 seeds',
+    (daysInMonth) => {
+      for (let seedN = 0; seedN < 30; seedN += 1) {
+        const rng = mulberry32(hashSeed(`seed-${seedN}|${daysInMonth}`));
+        const planned = planOffSkeleton(daysInMonth, rng);
+        const runs = contiguousRuns(planned);
+
+        for (const run of runs) {
+          const length = run.end - run.start + 1;
+          expect(length, `seed ${seedN}, ${daysInMonth}d: run ${run.start}-${run.end}`).toBeGreaterThanOrEqual(2);
+          expect(length, `seed ${seedN}, ${daysInMonth}d: run ${run.start}-${run.end}`).toBeLessThanOrEqual(3);
+        }
+        for (let i = 1; i < runs.length; i += 1) {
+          const gap = runs[i].start - runs[i - 1].end - 1;
+          expect(gap, `seed ${seedN}, ${daysInMonth}d: gap between runs ${i - 1} and ${i}`).toBeGreaterThanOrEqual(3);
+        }
+      }
+    }
+  );
 });

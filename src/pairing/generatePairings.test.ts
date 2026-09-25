@@ -296,3 +296,63 @@ describe('generatePairings — turnaround window (docs/pairing-assumptions.md it
     expect(generatePairings([out, back], baseConstraints)).toHaveLength(0);
   });
 });
+
+describe('generatePairings — turnaroundOnlyStations (docs/pairing-assumptions.md item 11)', () => {
+  const constraintsWithTurnaroundOnly: PairingSearchConstraints = {
+    ...baseConstraints,
+    turnaroundMinMinutes: 45,
+    turnaroundMaxMinutes: 150,
+    turnaroundOnlyStations: ['MCT'],
+  };
+
+  it('rejects an ordinary layover-window connection at a turnaround-only station', () => {
+    const out = instance({
+      depIata: 'DXB',
+      arrIata: 'MCT',
+      depUTC: '2026-02-01T06:00',
+      arrUTC: '2026-02-01T07:15',
+    });
+    const back = instance({
+      depIata: 'MCT',
+      arrIata: 'DXB',
+      depUTC: '2026-02-02T07:00', // ~24h ground — inside the ordinary layover window
+      arrUTC: '2026-02-02T08:15',
+    });
+
+    expect(generatePairings([out, back], constraintsWithTurnaroundOnly)).toHaveLength(0);
+  });
+
+  it('still accepts a genuine turnaround-window connection at a turnaround-only station', () => {
+    const out = instance({
+      depIata: 'DXB',
+      arrIata: 'MCT',
+      depUTC: '2026-02-01T06:00',
+      arrUTC: '2026-02-01T07:15',
+    });
+    const back = instance({
+      depIata: 'MCT',
+      arrIata: 'DXB',
+      depUTC: '2026-02-01T08:30', // 75min ground — inside the turnaround window
+      arrUTC: '2026-02-01T09:45',
+    });
+
+    expect(generatePairings([out, back], constraintsWithTurnaroundOnly)).toHaveLength(1);
+  });
+
+  it('leaves a station NOT in turnaroundOnlyStations able to use the ordinary layover window', () => {
+    const out = instance({
+      depIata: 'DXB',
+      arrIata: 'LHR',
+      depUTC: '2026-02-01T07:50',
+      arrUTC: '2026-02-01T15:25',
+    });
+    const back = instance({
+      depIata: 'LHR',
+      arrIata: 'DXB',
+      depUTC: '2026-02-02T13:05',
+      arrUTC: '2026-02-02T20:45',
+    });
+
+    expect(generatePairings([out, back], constraintsWithTurnaroundOnly)).toHaveLength(1);
+  });
+});

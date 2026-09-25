@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { TURNAROUND_ONLY_STATIONS } from '../pairing/constraints';
 
 interface SeedFlight {
   number: string;
@@ -10,6 +11,7 @@ interface SeedFlight {
   stdUTCMin: number;
   staUTCMin: number;
   arrivalDayOffset: number;
+  daysOfWeek: string;
 }
 
 interface ReferenceAirport {
@@ -127,5 +129,24 @@ describe('DXB seed schedule — turnaround routes (docs/pairing-assumptions.md i
     const ret = findFlight(flights, 'LCA', 'DXB');
     const ground = turnaroundGroundMinutes(outbound, ret);
     expect(ground).toBeGreaterThanOrEqual(480); // still an ordinary layover-shaped connection
+  });
+});
+
+describe('DXB seed schedule — turnaroundOnlyStations coverage (docs/pairing-assumptions.md item 11)', () => {
+  it.each(TURNAROUND_ONLY_STATIONS)(
+    '%s: has a turnaround-window return every day (daily schedule, one instance pair suffices)',
+    (iata) => {
+      const outbound = findFlight(flights, 'DXB', iata);
+      const ret = findFlight(flights, iata, 'DXB');
+      expect(outbound.daysOfWeek).toBe('1111111');
+      expect(ret.daysOfWeek).toBe('1111111');
+      const ground = turnaroundGroundMinutes(outbound, ret);
+      expect(ground).toBeGreaterThanOrEqual(45);
+      expect(ground).toBeLessThanOrEqual(150);
+    }
+  );
+
+  it('excludes AMD, whose real published return falls outside the turnaround window', () => {
+    expect(TURNAROUND_ONLY_STATIONS as readonly string[]).not.toContain('AMD');
   });
 });

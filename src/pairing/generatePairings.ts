@@ -101,7 +101,11 @@ export function generatePairings(
     fleetTypes,
     turnaroundMinMinutes,
     turnaroundMaxMinutes,
+    turnaroundOnlyStations,
   } = constraints;
+  const turnaroundOnlyStationSet = turnaroundOnlyStations
+    ? new Set(turnaroundOnlyStations)
+    : null;
 
   if (maxTripDays < 1) {
     throw new Error(`generatePairings: maxTripDays must be >= 1 (got ${maxTripDays})`);
@@ -126,16 +130,28 @@ export function generatePairings(
    * replacement for the layover window. `hasTurnaroundWindow` false
    * reproduces the pre-item-10 single-window behavior exactly.
    */
-  function isAcceptableGroundTime(groundMinutes: number): boolean {
-    if (groundMinutes >= minLayoverMinutes && groundMinutes <= maxLayoverMinutes) return true;
-    if (
+  function isWithinTurnaroundWindow(groundMinutes: number): boolean {
+    return (
       hasTurnaroundWindow &&
       groundMinutes >= turnaroundMinMinutes! &&
       groundMinutes <= turnaroundMaxMinutes!
-    ) {
-      return true;
+    );
+  }
+
+  /**
+   * `atStation` is the outstation the connection happens at (the arriving
+   * leg's `arrIata`, same as the next leg's `depIata`) — item 11's
+   * `turnaroundOnlyStations` check needs to know WHERE the ground time is
+   * being spent, not just how long it is.
+   */
+  function isAcceptableGroundTime(groundMinutes: number, atStation: string): boolean {
+    if (turnaroundOnlyStationSet?.has(atStation)) {
+      // Item 11 — a listed station never gets the ordinary layover window,
+      // regardless of how well the ground time would otherwise fit it.
+      return isWithinTurnaroundWindow(groundMinutes);
     }
-    return false;
+    if (groundMinutes >= minLayoverMinutes && groundMinutes <= maxLayoverMinutes) return true;
+    return isWithinTurnaroundWindow(groundMinutes);
   }
 
   const byDep = groupByDeparture(instances);
@@ -163,7 +179,7 @@ export function generatePairings(
         continue; // fleet-type-consistency assumption
       }
       const layover = minutesBetween(lastLeg.arrUTC, next.depUTC);
-      if (!isAcceptableGroundTime(layover)) {
+      if (!isAcceptableGroundTime(layover, lastLeg.arrIata)) {
         continue;
       }
       const candidateTripDays = calendarDaySpan(tripStartServiceDate, next.serviceDate);

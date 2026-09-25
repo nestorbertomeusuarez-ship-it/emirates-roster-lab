@@ -136,4 +136,20 @@ export interface PairingSearchConstraints {
   turnaroundMinMinutes?: number;
   /** See `turnaroundMinMinutes`'s doc comment. */
   turnaroundMaxMinutes?: number;
+  /**
+   * Optional list of outstation IATA codes (docs/pairing-assumptions.md
+   * item 11) that ONLY ever host a same-day turnaround in real operations —
+   * never an overnight layover. Without this, a station whose schedule
+   * happens to have just one daily frequency each way (the common case in
+   * this app's seed data) still legally chains into a ~24h "layover"
+   * simply because that gap falls inside `[minLayoverMinutes,
+   * maxLayoverMinutes]` — real EK crews do not lay over at these stations.
+   * A connection at a listed station is accepted ONLY when its ground time
+   * falls in the turnaround window (`turnaroundMinMinutes`/
+   * `turnaroundMaxMinutes`, which must both be set for this to have any
+   * effect) — the ordinary layover window is not consulted for it at all.
+   * A station absent from this list (or the list itself absent) keeps the
+   * existing OR-of-both-windows behavior unchanged.
+   */
+  turnaroundOnlyStations?: readonly string[];
 }

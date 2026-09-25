@@ -185,3 +185,60 @@ LCA-MLA multi-city tag-on itself remains modeled as two independent DXB
 nonstops (deferred, unchanged by this item) — see `docs/data-sources.md`'s
 2026-09-24 entry for which seed routes were actually switched to turnaround
 scheduling and why LCA itself was deliberately excluded.
+
+## 11. `turnaroundOnlyStations`: some outstations NEVER get a layover, only a turnaround
+
+Direct DB simulation feedback (2026-09-25): with item 10's OR-of-both-windows
+rule alone, a turnaround-flagged station with only ONE daily frequency each
+way still legally chained into a ~24-25h "layover" (JED 3d, KWI 3d, RUH 2d,
+BGW 2d, CAI 2d, BLR 2d observed) simply because that gap falls inside
+`[minLayoverMinutes, maxLayoverMinutes]` — real EK crews do not lay over at
+these stations at all.
+
+`PairingSearchConstraints.turnaroundOnlyStations` (optional
+`readonly string[]`) lists outstations where a connection is accepted ONLY
+when its ground time falls in the turnaround window — the ordinary layover
+window is never consulted for a listed station, regardless of how well the
+ground time would otherwise fit it (`generatePairings.ts#isAcceptableGroundTime`,
+keyed off the connection's own outstation, `lastLeg.arrIata`).
+
+`src/pairing/constraints.ts#TURNAROUND_ONLY_STATIONS` = the 14
+turnaround-flagged seed routes MINUS `AMD`: BAH, KWI, JED, RUH, DMM, MCT,
+AMM, BGW, BOM, DEL, ISB, CAI, BLR. AMD kept its real published times (405min
+ground — outside the turnaround window) per item 10's own scope decision;
+listing it here would leave it with ZERO valid connections at all (405min
+fits neither window). KWI (105min) and CAI (95min) were independently
+verified against the seed JSON to have real/derived ground times genuinely
+inside the window, so both are safely included.
+
+### Verification
+
+New `generatePairings.test.ts` describe block: a turnaround-only station
+rejects an ordinary 24h-ish layover-window connection but still accepts a
+genuine turnaround-window one; a non-listed station is unaffected. New
+`seedSchedule.test.ts` describe block: every station in
+`TURNAROUND_ONLY_STATIONS` has a daily (`daysOfWeek: '1111111'`) return
+whose ground time is inside `[45,150]`min, read from the actual generated
+seed JSON — and confirms `AMD` is NOT in the list.
+
+## 12. Regression test for the constraints field-copying bug (fixed directly, commit cbec482)
+
+`src/pairing/db/pairings.ts#generatePairingsForMonth` used to copy
+`constraints` field-by-field into the object passed to the pure
+`generatePairings`, silently dropping `turnaroundMinMinutes`/
+`turnaroundMaxMinutes`/`turnaroundOnlyStations` whenever a new optional
+field was added to `PairingSearchConstraints` — so the DB-backed generation
+path never produced a turnaround even though the pure `generatePairings`
+already supported it (caught only by comparing the pure engine's own unit
+tests against a real DB simulation, see docs/data-sources.md's own
+verification notes). Fixed by spreading `...constraints` instead.
+
+`src/pairing/db/pairings.test.ts` (new) regression-tests this WITHOUT a real
+database — `vi.doMock` stubs out `ensureFlightInstancesForMonth` (the only
+Prisma-touching call this wrapper makes) with a synthetic in-memory instance
+pool, so `generatePairingsForMonth` can be exercised end-to-end with a fake
+`PrismaClient` that is never actually used. This is a deliberate deviation
+from this codebase's usual `src/pairing/db/*.test.ts` convention (real
+integration tests against the seeded dev DB, see `loadPairing.test.ts`'s own
+doc comment) — that pattern needs synthetic DB writes/teardown, which this
+task's own scope explicitly forbids.

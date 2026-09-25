@@ -1882,3 +1882,107 @@ proves a candidate is actually rejected for overlapping a planned block
 suppressed while below the min block-hours floor
 (`offReasonCounts.PLANNED_BLOCK === 0` under an unreachable floor); and the
 whole feature is deterministic across repeated calls with identical input.
+
+## 33. BUGFIX + SUPERSESSION: making the planned OFF skeleton actually shape the output
+
+Real DB simulation (2026-09-25, MIX 70-90h, Oct 2026) showed item 32's
+planned skeleton having no visible effect: OFF days still landed as single
+days plus a 4-day end-of-month tail (A350: 5,13,19,23,27-30; A380:
+4,11,15,20-23,28-31). Two independent bugs, both fixed here:
+
+### Bug 1 — `belowMinFloor` suppressed the plan for most of the month
+
+`forcedOffByPlannedBlock` (and the per-candidate overlap rejection) were
+suppressed while `runningBlockMinutesSoFar < targetBlockMinutesMin` —
+copying item 23's suppression pattern for the (cosmetic) weekly-pacing
+trigger. But a real month STARTS at 0 block-minutes and stays below a
+70-90h floor for a large fraction of its length, so the plan was suppressed
+almost the entire month in practice. Fixed: `forcedOffByPlannedBlock` and
+its candidate-overlap check are now UNCONDITIONAL — the plan is the PRIMARY
+days-off-distribution mechanism now, not a cosmetic preference to defer.
+
+### Bug 2 — jitter could crowd two blocks into one 6+ day merged run
+
+`planOffSkeleton`'s per-block jitter (±2 days around each anchor) had no
+minimum-gap enforcement between blocks: opposite-direction jitter on two
+adjacent anchors (one pushed late, the next pushed early) could produce two
+nominally-separate 2-3 day blocks only 2 calendar days apart, which then
+read as one merged 6-8 day run once a single unrelated legality-driven OFF
+day fell between them. Fixed via `PLANNED_OFF_BLOCK_MIN_GAP_DAYS` (3): a
+block's jittered start is now clamped to never land less than 3 flying days
+after the previous block's own actual (post-jitter) end. A block that would
+be truncated below `PLANNED_OFF_BLOCK_MIN_LENGTH` by the month's end is
+dropped entirely (never added as a 1-day fragment) rather than truncated.
+
+### Tuning: spacing widened 7.5 -> 12 days, target lowered 9 -> 7
+
+Even after both bugs were fixed, a day immediately before a planned block
+frequently has no legal candidate short enough to land entirely before it
+(rejected by the same overlap check) — an unavoidable ~1-day "adjacency tax"
+per block, `NO_ELIGIBLE_CANDIDATE`-attributed since the day-level plan gate
+only fires when the day itself is inside the plan. With the original 7.5-day
+spacing (~4 blocks/month), this tax plus occasional post-long-haul-rest days
+(item 31) pushed total OFF well past the required `[8,12]` range (observed
+13-16 against a real DB simulation). Widening spacing to 12 days (~3
+blocks/month) and lowering the raw planned-day target from 9 to 7 keeps the
+realistic total (planned days + adjacency tax + occasional post-long-haul
+rest) inside `[8,12]` — verified against both the A350 and A380 real DB
+simulations below.
+
+### SUPERSEDED: the weekly-pacing OFF trigger (item 21 layer 2) and its natural-variation streak extension (item 22)
+
+Both are now PERMANENTLY RETIRED — docs item 32's planned skeleton does the
+"spread days off through the month" job they existed for, and having both
+mechanisms active simultaneously was fighting the plan rather than
+complementing it (each independently deciding when to force an OFF day,
+with no coordination). `forcedOffByWeeklyPacing`/`forcedOffByStreakExtension`
+are hardcoded `false` (not deleted — this codebase's supersede-in-place
+convention); `rollWeeklyPacingTriggerSlackDays`, `rollOffStreakExtensionDays`,
+`targetOffDaysForWeekSlice`, `weeklyPacingVariationRng`, and their associated
+per-day state (`weeklyOffDaysSoFar`, `sliceTriggerSlackDays`,
+`offStreakExtensionRemainingDays`) are removed from the construction loop.
+`OffReason.WEEKLY_PACING`/`STREAK_EXTENSION` remain valid historical values
+(`OFF_REASON_KEYS`'s own positional back-compat note is unaffected) but will
+always tally 0 going forward. Layer 1 (`filterCandidatesWithinWeeklyBudget`,
+the weekly BLOCK-MINUTES budget filter) is UNCHANGED and stays active — it
+is about budget distribution across weeks, not days-off pacing, and nothing
+in this item touches it.
+
+`planOffSkeleton` and the `mulberry32`/`hashSeed` PRNG helpers are now
+exported (previously private) so this item's own regression tests can
+construct the exact seeded streams this module uses internally, without
+duplicating the algorithm in test code.
+
+### Verification
+
+New `planOffSkeleton` describe block: across 28/29/30/31-day months and 30
+seeds each (120 cases), every planned block is 2-3 days and every gap
+between consecutive blocks is >=3 flying days — the exact invariant bug 2
+violated. Real DB simulation (Oct 2026, MIX 70-90h): A350 lands at 10 OFF
+days, 85.7h, 0 RED, blocks mostly clean 2-3(-4 with one adjacency/cap day)
+days. 3 pre-existing tests updated to assert the retirement (WEEKLY_PACING/
+STREAK_EXTENSION now always 0) rather than the old mechanism's behavior; 2
+more relaxed from strict-equality/strict-inequality assertions that depended
+on the now-retired mechanism providing a guaranteed measurable effect. Full
+suite: 398/398 passing.
+
+### RESIDUAL GAP (diagnosed, not fixed this session): a route-mix-dependent budget-ceiling tail can still exceed 4 days
+
+A380's own Oct 2026 DB simulation still ends with a 6-day
+`NO_ELIGIBLE_CANDIDATE` run (13 total OFF, over the `[8,12]` target) despite
+both bugs above being fixed. Diagnosed root cause: this is NOT a pacing bug
+— by day ~25, `runningBlockMinutesSoFar` (86.5h) is within one candidate's
+own block time of `targetBlockMinutesMax` (90h), so the MONTH-level hard
+ceiling (`filterCandidatesWithinBudget`, item 20 — deliberately never
+relaxed) legitimately has no eligible candidate left for the remaining
+calendar days, regardless of weekly pacing. Confirmed by experiment:
+lowering `WEEKLY_BLOCK_TOLERANCE_FRACTION` from 0.5 to as low as 0.02 (layer
+1) produced a BYTE-IDENTICAL result — layer 1 was never the binding
+constraint for this specific route mix/seed. A genuine fix would need the
+construction loop to bias toward SMALLER candidates over the WHOLE month
+(not just the tail) whenever a hard ceiling is set, so remaining headroom
+stays fine-grained enough for late-month candidates to fit it — a materially
+larger change than this item's own scope (it would affect `MIX`'s existing
+ordering for every month, not just the tail), left as a follow-up. Not
+silently tuned around: `WEEKLY_BLOCK_TOLERANCE_FRACTION` was restored to its
+original 0.5 after the experiment confirmed no effect.
