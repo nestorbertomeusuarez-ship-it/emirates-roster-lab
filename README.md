@@ -1,4 +1,6 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Personal roster planning tool for an Emirates A350/A380 pilot, built with Next.js. The monthly roster includes a separate lifestyle panel for **OFF oficiales, Real Work Days, Home Days, Family Quality Days, Night/Jetlag Burden and Reports/mes**.
+
+See [PilotTalk evidence and lifestyle definitions](docs/pilottalk-lifestyle.md) for source provenance, historical observations, A350/A380 hypotheses, recovery sensitivities and counting limitations. Lifestyle estimates describe the stored roster and remain separate from GCAA compliance evaluation.
 
 ## Getting Started
 

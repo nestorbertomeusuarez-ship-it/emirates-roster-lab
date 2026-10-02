@@ -18,6 +18,7 @@ import {
   buildRosterGrid,
   getOrCreateRosterMonth,
   listRosterEntries,
+  findRosterMonth,
 } from '@/pairing/db/roster';
 import { generatePairingsForMonth } from '@/pairing/db/pairings';
 import { countFlightInstancesForMonth } from '@/pairing/db/flightInstances';
@@ -36,6 +37,8 @@ import { buildFlightDaySummaryMap } from './flightDaySummary';
 import { buildMonthSummary } from './monthSummary';
 import { nextMonth, previousMonth, type YearMonth } from './adjacentMonth';
 import { hasNoScheduleDataForMonth } from './emptyScheduleData';
+import { buildMonthLifestyle } from '@/lifestyle/monthLifestyle';
+import LifestylePanel from './LifestylePanel';
 
 const WEEKDAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -67,6 +70,12 @@ interface RosterMonthPageProps {
   params: Promise<{ year: string; month: string }>;
   searchParams: Promise<{
     genSummary?: string;
+    commute?: string;
+    nightRecovery?: string;
+    jetlagRecovery?: string;
+    largeShiftRecovery?: string;
+    standbyAtHome?: string;
+    vacationAtHome?: string;
   }>;
 }
 
@@ -193,6 +202,34 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
   // DXB days off) in the header, at a glance — see monthSummary.ts.
   const monthSummary = buildMonthSummary(cells, dayCategoryByDate, flightDaySummaryByDate);
 
+  // Lifestyle reads real adjacent history separately from the compliance evaluator.
+  const adjacent = await Promise.all([previousMonth({ year, month }), nextMonth({ year, month })].map(async ym => {
+    const roster = await findRosterMonth(prisma, ym.year, ym.month);
+    if (!roster) return { days: [], cells: [] };
+    const [days, rows] = await Promise.all([
+      loadRosterGenDaysForMonth(prisma, roster.id, ym.year, ym.month),
+      listRosterEntries(prisma, roster.id),
+    ]);
+    return { days, cells: buildRosterGrid(ym.year, ym.month, rows) };
+  }));
+  const setting = (raw: string | undefined, fallback: number, max = 72) => {
+    if (raw === undefined || raw.trim() === '') return fallback;
+    const value = Number(raw);
+    return Number.isFinite(value) && value >= 0 && value <= max ? value : fallback;
+  };
+  const lifestyleSummary = buildMonthLifestyle({
+    cells, rosterDays: rosterGenDays, contextDays: adjacent.flatMap(a => a.days), airportTimeZones,
+    priorContextKnown: adjacent[0].cells.length >= 2 && adjacent[0].cells.slice(-2).every(c => c.entry !== null),
+    config: {
+      commuteMinutes: setting(sp.commute, 30, 180),
+      nightRecoveryHours: setting(sp.nightRecovery, 12),
+      jetlagRecoveryHours: setting(sp.jetlagRecovery, 24),
+      largeShiftRecoveryHours: setting(sp.largeShiftRecovery, 36),
+      standbyAtHome: sp.standbyAtHome !== 'false',
+      vacationAtHome: sp.vacationAtHome === 'true',
+    },
+  });
+
   const pairings = await generatePairingsForMonth(prisma, year, month, DEFAULT_PAIRING_CONSTRAINTS);
   const candidatesByStartDate = new Map<string, GeneratedPairing[]>();
   for (const pairing of pairings) {
@@ -287,6 +324,8 @@ export default async function RosterMonthPage({ params, searchParams }: RosterMo
           </div>
         </div>
       </header>
+
+      <LifestylePanel summary={lifestyleSummary} />
 
       {/* Moved above the calendar (direct user feedback, 2026-09-17):
           generation is the primary "build my month" action, not a footnote
